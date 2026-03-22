@@ -37,7 +37,7 @@ interface ThermalOrder {
 export default function SmartBilling() {
   const { products } = useProducts();
   const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("+91 ");
   const [selectedThickness, setSelectedThickness] = useState("1 Inch");
   const [selectedProductId, setSelectedProductId] = useState(
     () =>
@@ -79,7 +79,7 @@ export default function SmartBilling() {
 
   const resetForm = () => {
     setCustomerName("");
-    setCustomerPhone("");
+    setCustomerPhone("+91 ");
     setSelectedThickness("1 Inch");
     setSelectedProductId(
       products.find((p) => p.thickness === "1 Inch")?.id ??
@@ -189,7 +189,7 @@ export default function SmartBilling() {
           </Label>
           <Input
             id="customer-phone"
-            placeholder="+91 98765 43210"
+            placeholder="98765 43210"
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
             className="bg-background border-border"

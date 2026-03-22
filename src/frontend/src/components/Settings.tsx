@@ -12,14 +12,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Check,
   Download,
+  Eye,
+  EyeOff,
   Pencil,
   Plus,
   RotateCcw,
+  Shield,
   Trash2,
   Upload,
   X,
@@ -27,15 +31,19 @@ import {
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { useFeatureFlags } from "../hooks/useFeatureFlags";
 import { useProducts } from "../hooks/useProducts";
 import type { Product } from "../hooks/useProducts";
 import { useSuppliers } from "../hooks/useSuppliers";
 import type { Supplier } from "../hooks/useSuppliers";
 import {
   exportAllData,
+  getAppPin,
   getBusinessProfile,
   importAllData,
+  saveAppPin,
   saveBusinessProfile,
+  setSessionUnlocked,
 } from "../utils/localStorage";
 
 function calcOutstanding(supplier: Supplier) {
@@ -48,11 +56,190 @@ function calcOutstanding(supplier: Supplier) {
   return purchases - payments;
 }
 
-export default function Settings() {
+interface SettingsProps {
+  onProfileSaved?: () => void;
+}
+
+function SecurityTab({ onProfileSaved }: { onProfileSaved?: () => void }) {
+  const [currentPin, setCurrentPin] = useState(() => getAppPin());
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
+  const [pinError, setPinError] = useState("");
+
+  const handleSetPin = () => {
+    if (newPin.length < 4) {
+      setPinError("PIN must be at least 4 characters");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError("PINs do not match");
+      return;
+    }
+    saveAppPin(newPin);
+    setSessionUnlocked(true);
+    setCurrentPin(newPin);
+    setNewPin("");
+    setConfirmPin("");
+    setPinError("");
+    toast.success("PIN set successfully! You are now the owner.");
+    onProfileSaved?.();
+  };
+
+  const handleRemovePin = () => {
+    saveAppPin("");
+    setSessionUnlocked(true);
+    setCurrentPin("");
+    setNewPin("");
+    setConfirmPin("");
+    setPinError("");
+    toast.success("PIN removed. App is now open access.");
+    onProfileSaved?.();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-[#436B95]" />
+          <div>
+            <h3 className="font-semibold text-foreground">PIN Protection</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Set a PIN so only you can access this app. Others will see a lock
+              screen.
+            </p>
+          </div>
+        </div>
+
+        {currentPin && (
+          <div className="flex items-center gap-2 py-2 px-3 bg-green-50 border border-green-200 rounded-lg">
+            <span className="text-green-700 text-sm font-semibold">
+              🔒 PIN is active
+            </span>
+            <span className="text-green-600 text-xs ml-auto">
+              App is protected
+            </span>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div>
+            <Label className="text-sm font-medium text-foreground">
+              {currentPin ? "New PIN" : "Set PIN"}
+            </Label>
+            <div className="relative mt-1">
+              <input
+                type={showPin ? "text" : "password"}
+                value={newPin}
+                onChange={(e) => {
+                  setNewPin(e.target.value);
+                  setPinError("");
+                }}
+                placeholder="Minimum 4 characters"
+                className="w-full h-10 px-3 pr-10 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-[#436B95]"
+                data-ocid="security.input"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPin ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium text-foreground">
+              Confirm PIN
+            </Label>
+            <input
+              type={showPin ? "text" : "password"}
+              value={confirmPin}
+              onChange={(e) => {
+                setConfirmPin(e.target.value);
+                setPinError("");
+              }}
+              placeholder="Re-enter PIN"
+              className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-[#436B95] mt-1"
+              data-ocid="security.textarea"
+            />
+          </div>
+
+          {pinError && (
+            <p
+              className="text-sm text-red-500"
+              data-ocid="security.error_state"
+            >
+              {pinError}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSetPin}
+            disabled={!newPin || !confirmPin}
+            className="w-full h-10 rounded-lg bg-[#436B95] text-white font-semibold text-sm hover:bg-[#355578] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            data-ocid="security.submit_button"
+          >
+            {currentPin ? "Change PIN" : "Set PIN"}
+          </button>
+        </div>
+      </div>
+
+      {currentPin && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              type="button"
+              className="w-full h-10 rounded-lg border border-red-200 text-red-600 font-semibold text-sm hover:bg-red-50 transition-colors"
+              data-ocid="security.delete_button"
+            >
+              Remove PIN Protection
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove PIN Protection?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will allow anyone to access the app without a PIN. You can
+                always set a new PIN later.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-ocid="security.cancel_button">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRemovePin}
+                className="bg-red-600 hover:bg-red-700 text-white"
+                data-ocid="security.confirm_button"
+              >
+                Remove PIN
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      <p className="text-xs text-muted-foreground text-center">
+        Once set, the PIN is stored only on this device. The owner (you) stays
+        logged in during the session.
+      </p>
+    </div>
+  );
+}
+
+export default function Settings({ onProfileSaved }: SettingsProps) {
   const { products, addProduct, updateProduct, deleteProduct, resetToDefault } =
     useProducts();
   const { suppliers, addSupplier, renameSupplier, deleteSupplier } =
     useSuppliers();
+  const { flags, updateFlag } = useFeatureFlags();
 
   // ---- Product editing state ----
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -73,6 +260,7 @@ export default function Settings() {
 
   // ---- New supplier form state ----
   const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierPhone, setNewSupplierPhone] = useState("");
   const [showAddSupplier, setShowAddSupplier] = useState(false);
 
   // ---- Business Profile state ----
@@ -99,8 +287,8 @@ export default function Settings() {
 
   const handleSaveProduct = (id: string) => {
     const price = Number.parseFloat(editPrice);
-    if (!editName.trim() || !editThickness.trim() || !price || price <= 0) {
-      toast.error("Please fill all fields with valid values");
+    if (!editName.trim() || Number.isNaN(price)) {
+      toast.error("Please fill in all fields correctly");
       return;
     }
     updateProduct(id, {
@@ -112,14 +300,17 @@ export default function Settings() {
     toast.success("Product updated");
   };
 
-  const handleAddProduct = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddProduct = () => {
     const price = Number.parseFloat(newPrice);
-    if (!newName.trim() || !newThickness.trim() || !price || price <= 0) {
-      toast.error("Please fill all fields with valid values");
+    if (!newName.trim() || Number.isNaN(price)) {
+      toast.error("Please fill in name and price");
       return;
     }
-    addProduct({ name: newName.trim(), thickness: newThickness.trim(), price });
+    addProduct({
+      name: newName.trim(),
+      thickness: newThickness.trim(),
+      price,
+    });
     setNewName("");
     setNewThickness("");
     setNewPrice("");
@@ -132,38 +323,35 @@ export default function Settings() {
     setSupplierRenameValue(s.name);
   };
 
-  const handleConfirmRenameSupplier = () => {
-    if (!renamingSupplierId || !supplierRenameValue.trim()) return;
-    renameSupplier(renamingSupplierId, supplierRenameValue.trim());
+  const handleSaveRenameSupplier = (id: string) => {
+    if (!supplierRenameValue.trim()) return;
+    renameSupplier(id, supplierRenameValue.trim());
     setRenamingSupplierId(null);
     toast.success("Supplier renamed");
   };
 
-  const handleAddSupplier = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddSupplier = () => {
     if (!newSupplierName.trim()) return;
-    addSupplier(newSupplierName.trim());
+    addSupplier(newSupplierName.trim(), newSupplierPhone.trim() || undefined);
     setNewSupplierName("");
+    setNewSupplierPhone("");
     setShowAddSupplier(false);
     toast.success("Supplier added");
   };
 
-  const handleDeleteSupplier = (id: string) => {
-    deleteSupplier(id);
-    toast.success("Supplier removed");
-  };
-
-  // ---- Profile handlers ----
+  // ---- Logo upload handler ----
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      setProfileLogo(ev.target?.result as string);
+      const base64 = ev.target?.result as string;
+      setProfileLogo(base64);
     };
     reader.readAsDataURL(file);
   };
 
+  // ---- Save profile ----
   const handleSaveProfile = () => {
     saveBusinessProfile({
       businessName: profileName,
@@ -172,19 +360,8 @@ export default function Settings() {
       pickupLocations: profilePickup,
       logoBase64: profileLogo,
     });
-    toast.success("Profile saved!");
-  };
-
-  // ---- Import handler ----
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      importAllData(text);
-    };
-    reader.readAsText(file);
+    toast.success("Profile saved! Logo updated everywhere.");
+    onProfileSaved?.();
   };
 
   return (
@@ -192,7 +369,7 @@ export default function Settings() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-6"
+      className="space-y-5"
       data-ocid="settings.section"
     >
       <div>
@@ -200,87 +377,56 @@ export default function Settings() {
           Settings
         </h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Manage your products, profile and data
+          Manage products, suppliers, profile & data
         </p>
       </div>
 
-      <Tabs defaultValue="products" data-ocid="settings.tab">
-        <TabsList className="w-full justify-start gap-1 bg-muted/40 border border-border rounded-lg p-1 h-auto flex-wrap">
-          <TabsTrigger
-            value="products"
-            className="text-xs px-3 py-1.5"
-            data-ocid="settings.tab"
-          >
-            Products
-          </TabsTrigger>
-          <TabsTrigger
-            value="suppliers"
-            className="text-xs px-3 py-1.5"
-            data-ocid="settings.tab"
-          >
-            Suppliers
-          </TabsTrigger>
-          <TabsTrigger
-            value="profile"
-            className="text-xs px-3 py-1.5"
-            data-ocid="settings.tab"
-          >
-            Business Profile
-          </TabsTrigger>
-          <TabsTrigger
-            value="backup"
-            className="text-xs px-3 py-1.5"
-            data-ocid="settings.tab"
-          >
-            Backup &amp; Restore
-          </TabsTrigger>
+      <Tabs defaultValue="products">
+        <TabsList className="w-full grid grid-cols-6 mb-4">
+          <TabsTrigger value="products">Products</TabsTrigger>
+          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="data">Data</TabsTrigger>
+          <TabsTrigger value="visibility">Visibility</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
-        {/* ─── PRODUCT MANAGEMENT ─── */}
-        <TabsContent value="products" className="space-y-4 mt-5">
+        {/* ── PRODUCTS TAB ── */}
+        <TabsContent value="products" className="space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-serif text-lg font-bold text-foreground">
-                Product Management
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {products.length} products · used in billing
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {products.length} products
+            </p>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
-                  variant="outline"
                   size="sm"
-                  className="border-[#8B8589]/50 text-muted-foreground hover:text-foreground gap-1.5"
-                  data-ocid="settings.secondary_button"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5"
+                  data-ocid="settings.reset_button"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <RotateCcw className="h-3 w-3" />
                   Reset to Default
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent data-ocid="settings.dialog">
+              <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>
                     Reset to Default Products?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will replace your current product list with the
-                    original 20 items. Any custom products or price changes will
-                    be lost.
+                    This will replace all products with the default frame list.
+                    Current products will be lost.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel data-ocid="settings.cancel_button">
-                    Cancel
-                  </AlertDialogCancel>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => {
                       resetToDefault();
-                      toast.success("Product list reset to defaults");
+                      toast.success("Products reset to default");
                     }}
-                    className="bg-[#353935] hover:bg-[#1e211e] text-white"
-                    data-ocid="settings.confirm_button"
+                    className="bg-[#436B95] hover:bg-[#355578]"
                   >
                     Reset
                   </AlertDialogAction>
@@ -290,365 +436,345 @@ export default function Settings() {
           </div>
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-[#8B8589]/10 border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Name
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Thickness
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-foreground">
-                      Price
-                    </th>
-                    <th className="py-3 px-4 text-right font-semibold text-foreground">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p, i) => {
-                    const isEditing = editingProductId === p.id;
-                    return (
-                      <tr
-                        key={p.id}
-                        className={`border-b border-border last:border-0 transition-colors ${
-                          isEditing
-                            ? "bg-[#436B95]/5"
-                            : i % 2 === 0
-                              ? ""
-                              : "bg-muted/20"
-                        }`}
-                        data-ocid={`settings.row.${i + 1}`}
-                      >
-                        <td className="py-2.5 px-4">
-                          {isEditing ? (
-                            <Input
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              className="h-8 text-sm bg-background border-border w-full"
-                              data-ocid="settings.input"
-                            />
-                          ) : (
-                            <span className="font-medium text-foreground">
-                              {p.name}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-4">
-                          {isEditing ? (
-                            <Input
-                              value={editThickness}
-                              onChange={(e) => setEditThickness(e.target.value)}
-                              className="h-8 text-sm bg-background border-border w-28"
-                              data-ocid="settings.input"
-                            />
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {p.thickness}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-4 text-right">
-                          {isEditing ? (
-                            <Input
-                              type="number"
-                              value={editPrice}
-                              onChange={(e) => setEditPrice(e.target.value)}
-                              className="h-8 text-sm bg-background border-border w-24 text-right ml-auto"
-                              data-ocid="settings.input"
-                            />
-                          ) : (
-                            <span className="font-medium text-foreground">
-                              ₹{p.price.toLocaleString("en-IN")}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <div className="flex justify-end gap-1">
-                            {isEditing ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveProduct(p.id)}
-                                  className="p-1.5 rounded hover:bg-green-50 text-green-600 transition-colors"
-                                  data-ocid="settings.save_button"
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingProductId(null)}
-                                  className="p-1.5 rounded hover:bg-muted text-muted-foreground transition-colors"
-                                  data-ocid="settings.cancel_button"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditProduct(p)}
-                                  className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                  data-ocid="settings.edit_button"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    deleteProduct(p.id);
-                                    toast.success("Product deleted");
-                                  }}
-                                  className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors"
-                                  data-ocid="settings.delete_button"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-5">
-            <h4 className="text-sm font-semibold text-foreground mb-4">
-              Add New Product
-            </h4>
-            <form onSubmit={handleAddProduct} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Product Name</Label>
-                  <Input
-                    placeholder="e.g. 8x10 Inch Frame"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="bg-background border-border h-9 text-sm"
-                    data-ocid="settings.input"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Thickness</Label>
-                  <Input
-                    placeholder="e.g. 1 Inch"
-                    value={newThickness}
-                    onChange={(e) => setNewThickness(e.target.value)}
-                    className="bg-background border-border h-9 text-sm"
-                    data-ocid="settings.input"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Price (₹)</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={newPrice}
-                    onChange={(e) => setNewPrice(e.target.value)}
-                    className="bg-background border-border h-9 text-sm"
-                    data-ocid="settings.input"
-                  />
-                </div>
-              </div>
-              <Button
-                type="submit"
-                className="bg-[#436B95] hover:bg-[#355578] text-white"
-                data-ocid="settings.primary_button"
-              >
-                <Plus className="h-4 w-4 mr-1.5" />
-                Add Product
-              </Button>
-            </form>
-          </div>
-        </TabsContent>
-
-        {/* ─── SUPPLIER MANAGEMENT ─── */}
-        <TabsContent value="suppliers" className="space-y-4 mt-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-serif text-lg font-bold text-foreground">
-                Supplier Management
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {suppliers.length} suppliers
-              </p>
-            </div>
-            {!showAddSupplier && (
-              <Button
-                size="sm"
-                onClick={() => setShowAddSupplier(true)}
-                className="bg-[#436B95] hover:bg-[#355578] text-white gap-1.5"
-                data-ocid="settings.open_modal_button"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Supplier
-              </Button>
-            )}
-          </div>
-
-          {showAddSupplier && (
-            <form onSubmit={handleAddSupplier} className="flex gap-2">
-              <Input
-                placeholder="Supplier name"
-                value={newSupplierName}
-                onChange={(e) => setNewSupplierName(e.target.value)}
-                className="flex-1 bg-background border-border"
-                autoFocus
-                data-ocid="settings.input"
-              />
-              <Button
-                type="submit"
-                className="bg-[#436B95] hover:bg-[#355578] text-white"
-                data-ocid="settings.submit_button"
-              >
-                Add
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowAddSupplier(false);
-                  setNewSupplierName("");
-                }}
-                data-ocid="settings.cancel_button"
-              >
-                Cancel
-              </Button>
-            </form>
-          )}
-
-          {suppliers.length === 0 ? (
-            <div
-              className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground"
-              data-ocid="settings.empty_state"
-            >
-              No suppliers yet. Add your first supplier above.
-            </div>
-          ) : (
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-[#8B8589]/10 border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Supplier Name
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-foreground">
-                      Outstanding Balance
-                    </th>
-                    <th className="py-3 px-4" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {suppliers.map((s, i) => {
-                    const outstanding = calcOutstanding(s);
-                    const isRenaming = renamingSupplierId === s.id;
-                    return (
-                      <tr
-                        key={s.id}
-                        className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
-                        data-ocid={`settings.row.${i + 1}`}
-                      >
-                        <td className="py-3 px-4">
-                          {isRenaming ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={supplierRenameValue}
-                                onChange={(e) =>
-                                  setSupplierRenameValue(e.target.value)
-                                }
-                                className="h-7 text-sm bg-background border-border w-48"
-                                data-ocid="settings.input"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter")
-                                    handleConfirmRenameSupplier();
-                                  if (e.key === "Escape")
-                                    setRenamingSupplierId(null);
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={handleConfirmRenameSupplier}
-                                className="p-1 rounded hover:bg-green-50 text-green-600"
-                                data-ocid="settings.save_button"
-                              >
-                                <Check className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setRenamingSupplierId(null)}
-                                className="p-1 rounded hover:bg-muted"
-                                data-ocid="settings.cancel_button"
-                              >
-                                <X className="h-4 w-4 text-muted-foreground" />
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="font-medium text-foreground">
-                              {s.name}
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className={`py-3 px-4 text-right font-semibold ${outstanding > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
+            <div className="divide-y divide-border">
+              {products.map((p) => (
+                <div key={p.id} className="p-3">
+                  {editingProductId === p.id ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Name"
+                          className="h-8 text-xs col-span-2"
+                          data-ocid="settings.input"
+                        />
+                        <Input
+                          value={editThickness}
+                          onChange={(e) => setEditThickness(e.target.value)}
+                          placeholder='Thickness (e.g. 1")'
+                          className="h-8 text-xs"
+                          data-ocid="settings.input"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(e.target.value)}
+                          placeholder="Price (₹)"
+                          type="number"
+                          className="h-8 text-xs flex-1"
+                          data-ocid="settings.input"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveProduct(p.id)}
+                          className="h-8 px-3 bg-[#436B95] hover:bg-[#355578] text-white"
+                          data-ocid="settings.save_button"
                         >
-                          ₹{outstanding.toLocaleString("en-IN")}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleStartRenameSupplier(s)}
-                              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                              data-ocid="settings.edit_button"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSupplier(s.id)}
-                              className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors"
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingProductId(null)}
+                          className="h-8 px-3"
+                          data-ocid="settings.cancel_button"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {p.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {p.thickness && `${p.thickness} · `}₹
+                          {p.price.toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleStartEditProduct(p)}
+                          className="h-7 w-7 p-0 hover:bg-[#436B95]/10 hover:text-[#436B95]"
+                          data-ocid="settings.edit_button"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-500"
                               data-ocid="settings.delete_button"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete Product?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Delete "{p.name}"? This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => {
+                                  deleteProduct(p.id);
+                                  toast.success("Product deleted");
+                                }}
+                                className="bg-red-500 hover:bg-red-600"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-          <p className="text-xs text-muted-foreground">
-            💡 Manage transaction history from the{" "}
-            <span className="font-medium text-foreground">Supplier Ledger</span>{" "}
-            tab.
-          </p>
+          </div>
+
+          {/* Add new product */}
+          <div className="bg-[#436B95]/5 border border-[#436B95]/20 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-[#436B95]">
+              Add New Product
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder='e.g. 20x24"'
+                className="h-8 text-xs col-span-2"
+                data-ocid="settings.input"
+              />
+              <Input
+                value={newThickness}
+                onChange={(e) => setNewThickness(e.target.value)}
+                placeholder='e.g. 1"'
+                className="h-8 text-xs"
+                data-ocid="settings.input"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                placeholder="Price (₹)"
+                type="number"
+                className="h-8 text-xs flex-1"
+                data-ocid="settings.input"
+              />
+              <Button
+                size="sm"
+                onClick={handleAddProduct}
+                className="h-8 px-4 bg-[#436B95] hover:bg-[#355578] text-white text-xs gap-1.5"
+                data-ocid="settings.add_button"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </Button>
+            </div>
+          </div>
         </TabsContent>
 
-        {/* ─── BUSINESS PROFILE ─── */}
-        <TabsContent value="profile" className="space-y-5 mt-5">
-          <h3 className="font-serif text-lg font-bold text-foreground">
-            Business Profile
-          </h3>
+        {/* ── SUPPLIERS TAB ── */}
+        <TabsContent value="suppliers" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-foreground">
+              {suppliers.length} suppliers
+            </p>
+            <Button
+              size="sm"
+              onClick={() => setShowAddSupplier(!showAddSupplier)}
+              className="h-8 text-xs gap-1.5 bg-[#436B95] hover:bg-[#355578] text-white"
+              data-ocid="settings.add_supplier_button"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Supplier
+            </Button>
+          </div>
 
-          {/* Logo Upload */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-foreground">
+          {showAddSupplier && (
+            <div className="bg-[#436B95]/5 border border-[#436B95]/20 rounded-xl p-3 space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                  placeholder="Supplier name"
+                  className="h-8 text-xs flex-1"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddSupplier()}
+                  autoFocus
+                  data-ocid="settings.input"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newSupplierPhone}
+                  onChange={(e) => setNewSupplierPhone(e.target.value)}
+                  placeholder="+91 XXXXX XXXXX (optional)"
+                  className="h-8 text-xs flex-1"
+                  data-ocid="settings.input"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAddSupplier}
+                  className="h-8 px-3 bg-[#436B95] hover:bg-[#355578] text-white"
+                  data-ocid="settings.confirm_button"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAddSupplier(false)}
+                  className="h-8 px-3"
+                  data-ocid="settings.cancel_button"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="divide-y divide-border">
+              {suppliers.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  No suppliers yet
+                </p>
+              )}
+              {suppliers.map((s) => {
+                const outstanding = calcOutstanding(s);
+                return (
+                  <div key={s.id} className="p-3">
+                    {renamingSupplierId === s.id ? (
+                      <div className="flex gap-2">
+                        <Input
+                          value={supplierRenameValue}
+                          onChange={(e) =>
+                            setSupplierRenameValue(e.target.value)
+                          }
+                          className="h-8 text-xs flex-1"
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && handleSaveRenameSupplier(s.id)
+                          }
+                          autoFocus
+                          data-ocid="settings.input"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveRenameSupplier(s.id)}
+                          className="h-8 px-3 bg-[#436B95] hover:bg-[#355578] text-white"
+                          data-ocid="settings.save_button"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRenamingSupplierId(null)}
+                          className="h-8 px-3"
+                          data-ocid="settings.cancel_button"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {s.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {s.transactions.length} transactions ·{" "}
+                            {outstanding > 0 ? (
+                              <span className="text-[#436B95] font-medium">
+                                ₹{outstanding.toLocaleString("en-IN")} due
+                              </span>
+                            ) : (
+                              <span className="text-green-600">Cleared</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleStartRenameSupplier(s)}
+                            className="h-7 w-7 p-0 hover:bg-[#436B95]/10 hover:text-[#436B95]"
+                            data-ocid="settings.edit_button"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-500"
+                                data-ocid="settings.delete_button"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete Supplier?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Delete "{s.name}" and all their{" "}
+                                  {s.transactions.length} transactions? This
+                                  cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => {
+                                    deleteSupplier(s.id);
+                                    toast.success("Supplier deleted");
+                                  }}
+                                  className="bg-red-500 hover:bg-red-600"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── PROFILE TAB ── */}
+        <TabsContent value="profile" className="space-y-4">
+          {/* Logo upload */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <Label className="text-sm font-semibold text-foreground">
               Business Logo
             </Label>
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-[#8B8589]/50 bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
+              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
                 {profileLogo ? (
                   <img
                     src={profileLogo}
@@ -656,9 +782,7 @@ export default function Settings() {
                     className="w-full h-full object-contain"
                   />
                 ) : (
-                  <span className="text-xs text-muted-foreground text-center px-1">
-                    No logo
-                  </span>
+                  <Upload className="h-6 w-6 text-muted-foreground" />
                 )}
               </div>
               <div className="space-y-2">
@@ -668,158 +792,206 @@ export default function Settings() {
                   accept="image/*"
                   className="hidden"
                   onChange={handleLogoUpload}
-                  data-ocid="settings.upload_button"
                 />
                 <Button
-                  type="button"
-                  variant="outline"
                   size="sm"
+                  variant="outline"
                   onClick={() => logoInputRef.current?.click()}
-                  className="border-[#436B95] text-[#436B95] hover:bg-[#436B95]/10"
+                  className="h-8 text-xs gap-1.5"
                   data-ocid="settings.upload_button"
                 >
-                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  <Upload className="h-3.5 w-3.5" />
                   {profileLogo ? "Change Logo" : "Upload Logo"}
                 </Button>
                 {profileLogo && (
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => setProfileLogo("")}
-                    className="block text-xs text-red-500 hover:underline"
+                    className="h-8 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                    data-ocid="settings.remove_button"
                   >
-                    Remove logo
-                  </button>
+                    Remove
+                  </Button>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Used in PDF receipts as header &amp; stamp
+                  Shows in app header & on all bills
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">
-                Business Name
-              </Label>
-              <Input
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                className="bg-background border-border"
-                data-ocid="settings.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">
-                Phone Number
-              </Label>
-              <Input
-                value={profilePhone}
-                onChange={(e) => setProfilePhone(e.target.value)}
-                className="bg-background border-border"
-                data-ocid="settings.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">
-                GST / Trade License{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional)
-                </span>
-              </Label>
-              <Input
-                placeholder="e.g. 22AAAAA0000A1Z5"
-                value={profileGst}
-                onChange={(e) => setProfileGst(e.target.value)}
-                className="bg-background border-border"
-                data-ocid="settings.input"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium text-foreground">
-              Pickup Locations
+          {/* Business details */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <Label className="text-sm font-semibold text-foreground">
+              Business Details
             </Label>
-            <Textarea
-              placeholder="e.g. Basugaon, Kokrajhar, Bongaigaon"
-              value={profilePickup}
-              onChange={(e) => setProfilePickup(e.target.value)}
-              className="bg-background border-border resize-none"
-              rows={2}
-              data-ocid="settings.textarea"
-            />
-            <p className="text-xs text-muted-foreground">
-              Comma-separated. Shown on PDF receipts.
-            </p>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Business Name
+                </Label>
+                <Input
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="The Digital Gallery by Emon"
+                  className="h-9 text-sm"
+                  data-ocid="settings.input"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Phone Number
+                </Label>
+                <Input
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value)}
+                  placeholder="+91 XXXXX XXXXX"
+                  className="h-9 text-sm"
+                  data-ocid="settings.input"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  GST / Trade License (optional)
+                </Label>
+                <Input
+                  value={profileGst}
+                  onChange={(e) => setProfileGst(e.target.value)}
+                  placeholder="GSTIN or License No."
+                  className="h-9 text-sm"
+                  data-ocid="settings.input"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Pickup Locations
+                </Label>
+                <Textarea
+                  value={profilePickup}
+                  onChange={(e) => setProfilePickup(e.target.value)}
+                  placeholder="Basugaon, Kokrajhar, Bongaigaon, Barpeta Road"
+                  className="text-sm resize-none"
+                  rows={2}
+                  data-ocid="settings.input"
+                />
+              </div>
+            </div>
           </div>
 
           <Button
             onClick={handleSaveProfile}
-            className="bg-[#436B95] hover:bg-[#355578] text-white"
-            data-ocid="settings.save_button"
+            className="w-full h-10 bg-[#436B95] hover:bg-[#355578] text-white font-semibold"
+            data-ocid="settings.save_profile_button"
           >
             Save Profile
           </Button>
         </TabsContent>
 
-        {/* ─── BACKUP & RESTORE ─── */}
-        <TabsContent value="backup" className="space-y-5 mt-5">
-          <h3 className="font-serif text-lg font-bold text-foreground">
-            Backup &amp; Restore
-          </h3>
+        {/* ── DATA TAB ── */}
+        <TabsContent value="data" className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-foreground">
+              Backup & Restore
+            </p>
+            <p className="text-xs text-muted-foreground">
+              All your data (orders, inventory, suppliers, profile) is saved in
+              this browser. Export a backup file to keep it safe.
+            </p>
 
-          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-1">
-                Export All Data
-              </h4>
-              <p className="text-xs text-muted-foreground mb-3">
-                Download all your orders, products, suppliers, investments, and
-                profile as a JSON file.
-              </p>
+            <div className="space-y-2">
               <Button
-                onClick={exportAllData}
+                size="sm"
                 variant="outline"
-                className="border-[#436B95] text-[#436B95] hover:bg-[#436B95]/10"
-                data-ocid="settings.primary_button"
+                onClick={() => {
+                  exportAllData();
+                  toast.success("Backup downloaded!");
+                }}
+                className="w-full h-9 text-sm gap-2"
+                data-ocid="settings.export_button"
               >
-                <Download className="h-4 w-4 mr-2" />
-                Export All Data
+                <Download className="h-4 w-4" />
+                Download Backup (JSON)
               </Button>
-            </div>
 
-            <div className="h-px bg-border" />
-
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-1">
-                Import Data
-              </h4>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                <p className="text-xs text-amber-700 font-medium">
-                  ⚠️ Warning: Importing will overwrite all current data. This
-                  cannot be undone.
-                </p>
-              </div>
               <input
                 ref={importInputRef}
                 type="file"
                 accept=".json"
                 className="hidden"
-                onChange={handleImportFile}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const text = ev.target?.result as string;
+                    importAllData(text);
+                  };
+                  reader.readAsText(file);
+                }}
               />
               <Button
-                type="button"
+                size="sm"
                 variant="outline"
                 onClick={() => importInputRef.current?.click()}
-                className="border-[#8B8589]/50 text-muted-foreground hover:text-foreground"
-                data-ocid="settings.upload_button"
+                className="w-full h-9 text-sm gap-2"
+                data-ocid="settings.import_button"
               >
-                <Upload className="h-4 w-4 mr-2" />
-                Import from JSON
+                <Upload className="h-4 w-4" />
+                Import Backup
               </Button>
             </div>
           </div>
+        </TabsContent>
+
+        {/* ── VISIBILITY TAB ── */}
+        <TabsContent value="visibility" className="space-y-4">
+          <div className="rounded-lg border border-border p-4 space-y-4">
+            <div>
+              <h3 className="font-semibold text-foreground">
+                Module Visibility
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Turn off tabs you do not use. Billing is always on.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {[
+                { key: "khatabook" as const, label: "Khatabook" },
+                { key: "inventory" as const, label: "Inventory" },
+                { key: "suppliers" as const, label: "Suppliers" },
+                { key: "reports" as const, label: "Reports" },
+              ].map(({ key, label }) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between py-1"
+                >
+                  <span className="font-semibold text-sm text-foreground">
+                    {label}
+                  </span>
+                  <Switch
+                    checked={flags[key]}
+                    onCheckedChange={(val) => updateFlag(key, val)}
+                    data-ocid={`visibility.${key}.switch`}
+                  />
+                </div>
+              ))}
+              <div className="flex items-center justify-between py-1 opacity-50">
+                <span className="font-semibold text-sm text-foreground">
+                  Billing{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (always on)
+                  </span>
+                </span>
+                <Switch checked={true} disabled />
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── SECURITY TAB ── */}
+        <TabsContent value="security" className="space-y-4">
+          <SecurityTab onProfileSaved={onProfileSaved} />
         </TabsContent>
       </Tabs>
     </motion.div>

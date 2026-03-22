@@ -4,10 +4,12 @@ import { OrderStatus } from "../backend";
 import {
   addLocalOrder,
   adjustLocalStock,
+  deleteLocalOrder,
   getLocalInventory,
   getLocalOrders,
   saveLocalInventory,
   saveLocalOrders,
+  setLocalStock,
   settleLocalBalance,
   updateLocalOrderStatus,
 } from "../utils/localStorage";
@@ -21,11 +23,14 @@ export function useGetAllOrders() {
       try {
         if (!actor) return getLocalOrders();
         const orders = await actor.getAllOrders();
-        const sorted = [...orders].sort(
-          (a, b) => Number(b.orderDate) - Number(a.orderDate),
-        );
-        saveLocalOrders(sorted);
-        return sorted;
+        if (orders.length > 0) {
+          const sorted = [...orders].sort(
+            (a, b) => Number(b.orderDate) - Number(a.orderDate),
+          );
+          saveLocalOrders(sorted);
+          return sorted;
+        }
+        return getLocalOrders();
       } catch {
         return getLocalOrders();
       }
@@ -70,6 +75,22 @@ export function useCreateOrder() {
       return newOrder;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
+export function useDeleteOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: bigint) => {
+      deleteLocalOrder(id);
+    },
+    onSuccess: (_data, id) => {
+      qc.setQueryData(
+        ["orders"],
+        (old: (CustomerOrder & { customerPhone?: string })[] | undefined) =>
+          old ? old.filter((o) => String(o.id) !== String(id)) : [],
+      );
+    },
   });
 }
 
@@ -159,6 +180,16 @@ export function useDecrementStock() {
       } catch {
         /* local updated */
       }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
+  });
+}
+
+export function useSetStock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ size, value }: { size: string; value: number }) => {
+      setLocalStock(size, value);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });

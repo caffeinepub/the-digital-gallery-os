@@ -9,9 +9,13 @@ const KEYS = {
   investments: "gallery_investments",
   profile: "gallery_profile",
   products: "dg_products",
+  inventoryPhotos: "gallery_inventory_photos",
+  inventorySizes: "gallery_inventory_sizes",
+  appPin: "dg_app_pin",
+  lowStockThreshold: "dg_low_stock_threshold",
 };
 
-const FRAME_SIZES = [
+export const DEFAULT_PLAIN_SIZES = [
   '4x6"',
   '5x7"',
   '6x8"',
@@ -20,6 +24,130 @@ const FRAME_SIZES = [
   '12x18"',
   '18x24"',
 ];
+
+export const DEFAULT_MOUNT_SIZES = [
+  '4x6" (Mount)',
+  '5x7" (Mount)',
+  '6x8" (Mount)',
+  "A4 (Mount)",
+  '12x16" (Mount)',
+  '12x18" (Mount)',
+  '18x24" (Mount)',
+];
+
+export const DEFAULT_FRAME_SIZES = [
+  ...DEFAULT_PLAIN_SIZES,
+  ...DEFAULT_MOUNT_SIZES,
+];
+
+// ---- Inventory Sizes ----
+export function getInventorySizes(): string[] {
+  try {
+    const raw = localStorage.getItem(KEYS.inventorySizes);
+    if (raw) return JSON.parse(raw) as string[];
+  } catch {}
+  return [...DEFAULT_FRAME_SIZES];
+}
+
+export function saveInventorySizes(sizes: string[]) {
+  try {
+    localStorage.setItem(KEYS.inventorySizes, JSON.stringify(sizes));
+  } catch {}
+}
+
+export function addInventorySize(size: string) {
+  const sizes = getInventorySizes();
+  if (!sizes.includes(size)) {
+    sizes.push(size);
+    saveInventorySizes(sizes);
+  }
+}
+
+export function removeInventorySize(size: string) {
+  const sizes = getInventorySizes().filter((s) => s !== size);
+  saveInventorySizes(sizes);
+  const inv = getLocalInventory();
+  delete inv[size];
+  saveLocalInventory(inv);
+  removeInventoryPhoto(size);
+}
+
+export function renameInventorySize(oldName: string, newName: string) {
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === oldName) return;
+  // Rename in sizes list
+  const sizes = getInventorySizes();
+  const idx = sizes.indexOf(oldName);
+  if (idx === -1) return;
+  sizes[idx] = trimmed;
+  saveInventorySizes(sizes);
+  // Move stock value
+  const inv = getLocalInventory();
+  if (oldName in inv) {
+    inv[trimmed] = inv[oldName];
+    delete inv[oldName];
+    saveLocalInventory(inv);
+  }
+  // Move photo
+  const photos = getInventoryPhotos();
+  if (oldName in photos) {
+    photos[trimmed] = photos[oldName];
+    delete photos[oldName];
+    saveInventoryPhotos(photos);
+  }
+}
+
+// ---- App PIN ----
+export function getAppPin(): string {
+  try {
+    return localStorage.getItem(KEYS.appPin) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveAppPin(pin: string) {
+  try {
+    if (pin) {
+      localStorage.setItem(KEYS.appPin, pin);
+    } else {
+      localStorage.removeItem(KEYS.appPin);
+    }
+  } catch {}
+}
+
+export function isSessionUnlocked(): boolean {
+  try {
+    return sessionStorage.getItem("dg_unlocked") === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function setSessionUnlocked(value: boolean) {
+  try {
+    if (value) {
+      sessionStorage.setItem("dg_unlocked", "1");
+    } else {
+      sessionStorage.removeItem("dg_unlocked");
+    }
+  } catch {}
+}
+
+// ---- Low Stock Threshold ----
+export function getLowStockThreshold(): number {
+  try {
+    const raw = localStorage.getItem(KEYS.lowStockThreshold);
+    if (raw) return Number(raw);
+  } catch {}
+  return 0;
+}
+
+export function saveLowStockThreshold(n: number) {
+  try {
+    localStorage.setItem(KEYS.lowStockThreshold, String(n));
+  } catch {}
+}
 
 // ---- Orders ----
 export function getLocalOrders(): (CustomerOrder & {
@@ -44,16 +172,20 @@ export function getLocalOrders(): (CustomerOrder & {
   } catch {
     // ignore
   }
-  const seeds = getSeedOrders();
-  saveLocalOrders(seeds);
-  return seeds;
+  saveLocalOrders([]);
+  return [];
 }
 
 export function saveLocalOrders(
   orders: (CustomerOrder & { customerPhone?: string })[],
 ) {
   try {
-    localStorage.setItem(KEYS.orders, JSON.stringify(orders));
+    localStorage.setItem(
+      KEYS.orders,
+      JSON.stringify(orders, (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ),
+    );
   } catch {
     // ignore
   }
@@ -65,16 +197,23 @@ export function addLocalOrder(order: CustomerOrder, customerPhone?: string) {
   saveLocalOrders(orders);
 }
 
+export function deleteLocalOrder(id: bigint) {
+  const orders = getLocalOrders().filter((o) => String(o.id) !== String(id));
+  saveLocalOrders(orders);
+}
+
 export function updateLocalOrderStatus(id: bigint, status: OrderStatus) {
   const orders = getLocalOrders();
-  const updated = orders.map((o) => (o.id === id ? { ...o, status } : o));
+  const updated = orders.map((o) =>
+    String(o.id) === String(id) ? { ...o, status } : o,
+  );
   saveLocalOrders(updated);
 }
 
 export function settleLocalBalance(id: bigint) {
   const orders = getLocalOrders();
   const updated = orders.map((o) =>
-    o.id === id
+    String(o.id) === String(id)
       ? {
           ...o,
           advancePaid: o.totalAmount,
@@ -90,13 +229,26 @@ export function settleLocalBalance(id: bigint) {
 export function getLocalInventory(): Record<string, number> {
   try {
     const raw = localStorage.getItem(KEYS.inventory);
-    if (raw) return JSON.parse(raw) as Record<string, number>;
+    const stored: Record<string, number> = raw
+      ? (JSON.parse(raw) as Record<string, number>)
+      : {};
+    // Merge with all known sizes so every size exists
+    const sizes = getInventorySizes();
+    const merged: Record<string, number> = {};
+    for (const s of sizes) {
+      merged[s] = stored[s] ?? 0;
+    }
+    // Keep any extra keys from stored (custom sizes added before)
+    for (const k of Object.keys(stored)) {
+      if (!(k in merged)) merged[k] = stored[k];
+    }
+    return merged;
   } catch {
     // ignore
   }
   const defaults: Record<string, number> = {};
-  for (const s of FRAME_SIZES) {
-    defaults[s] = 10;
+  for (const s of DEFAULT_FRAME_SIZES) {
+    defaults[s] = 0;
   }
   saveLocalInventory(defaults);
   return defaults;
@@ -114,6 +266,43 @@ export function adjustLocalStock(size: string, delta: number) {
   const inv = getLocalInventory();
   inv[size] = Math.max(0, (inv[size] ?? 0) + delta);
   saveLocalInventory(inv);
+}
+
+export function setLocalStock(size: string, value: number) {
+  const inv = getLocalInventory();
+  inv[size] = Math.max(0, value);
+  saveLocalInventory(inv);
+}
+
+// ---- Inventory Photos ----
+export function getInventoryPhotos(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(KEYS.inventoryPhotos);
+    if (raw) return JSON.parse(raw) as Record<string, string>;
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+export function saveInventoryPhotos(photos: Record<string, string>) {
+  try {
+    localStorage.setItem(KEYS.inventoryPhotos, JSON.stringify(photos));
+  } catch {
+    // ignore
+  }
+}
+
+export function setInventoryPhoto(size: string, base64: string) {
+  const photos = getInventoryPhotos();
+  photos[size] = base64;
+  saveInventoryPhotos(photos);
+}
+
+export function removeInventoryPhoto(size: string) {
+  const photos = getInventoryPhotos();
+  delete photos[size];
+  saveInventoryPhotos(photos);
 }
 
 // ---- Supplier Notes (legacy) ----
@@ -170,48 +359,9 @@ export interface SupplierTransaction {
 export interface Supplier {
   id: string;
   name: string;
+  phone?: string;
   transactions: SupplierTransaction[];
   createdAt: number;
-}
-
-function getSeedSuppliers(): Supplier[] {
-  return [
-    {
-      id: "supplier-1",
-      name: "Glass Dealer",
-      createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
-      transactions: [
-        {
-          id: "tx-1",
-          type: "purchase",
-          description: "10 sheets clear glass 2mm",
-          amount: 1800,
-          date: Date.now() - 12 * 24 * 60 * 60 * 1000,
-        },
-        {
-          id: "tx-2",
-          type: "payment",
-          description: "Partial payment",
-          amount: 1000,
-          date: Date.now() - 7 * 24 * 60 * 60 * 1000,
-        },
-      ],
-    },
-    {
-      id: "supplier-2",
-      name: "Wood Frame Wholesaler",
-      createdAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
-      transactions: [
-        {
-          id: "tx-3",
-          type: "purchase",
-          description: "20 moulding strips (oak finish)",
-          amount: 3500,
-          date: Date.now() - 15 * 24 * 60 * 60 * 1000,
-        },
-      ],
-    },
-  ];
 }
 
 export function getLocalSuppliers(): Supplier[] {
@@ -221,9 +371,8 @@ export function getLocalSuppliers(): Supplier[] {
   } catch {
     // ignore
   }
-  const seeds = getSeedSuppliers();
-  saveLocalSuppliers(seeds);
-  return seeds;
+  saveLocalSuppliers([]);
+  return [];
 }
 
 export function saveLocalSuppliers(suppliers: Supplier[]) {
@@ -234,10 +383,11 @@ export function saveLocalSuppliers(suppliers: Supplier[]) {
   }
 }
 
-export function addLocalSupplier(name: string): Supplier {
+export function addLocalSupplier(name: string, phone?: string): Supplier {
   const supplier: Supplier = {
     id: `supplier-${Date.now()}`,
     name,
+    phone,
     transactions: [],
     createdAt: Date.now(),
   };
@@ -275,63 +425,6 @@ export function deleteSupplierTransaction(supplierId: string, txId: string) {
       : s,
   );
   saveLocalSuppliers(updated);
-}
-
-function getSeedOrders(): CustomerOrder[] {
-  const now = BigInt(Date.now()) * BigInt(1_000_000);
-  const day = BigInt(86400) * BigInt(1_000_000_000);
-  return [
-    {
-      id: BigInt(1),
-      customerName: "Priya Sharma",
-      status: OrderStatus.pending,
-      orderDate: now - day * BigInt(2),
-      totalAmount: 650,
-      advancePaid: 300,
-      balanceDue: 350,
-      items: [
-        { size: '12x18"', thickness: 1.5, quantity: BigInt(1), unitPrice: 650 },
-      ],
-    },
-    {
-      id: BigInt(2),
-      customerName: "Rohan Das",
-      status: OrderStatus.ready,
-      orderDate: now - day * BigInt(5),
-      totalAmount: 900,
-      advancePaid: 500,
-      balanceDue: 400,
-      items: [
-        { size: "A4", thickness: 1, quantity: BigInt(1), unitPrice: 300 },
-        { size: '12x16"', thickness: 1, quantity: BigInt(1), unitPrice: 450 },
-        { size: '4x6"', thickness: 1, quantity: BigInt(1), unitPrice: 150 },
-      ],
-    },
-    {
-      id: BigInt(3),
-      customerName: "Anita Borah",
-      status: OrderStatus.delivered,
-      orderDate: now - day * BigInt(10),
-      totalAmount: 950,
-      advancePaid: 950,
-      balanceDue: 0,
-      items: [
-        { size: '18x24"', thickness: 1.5, quantity: BigInt(1), unitPrice: 950 },
-      ],
-    },
-    {
-      id: BigInt(4),
-      customerName: "Bijit Narzary",
-      status: OrderStatus.pending,
-      orderDate: now - day * BigInt(1),
-      totalAmount: 400,
-      advancePaid: 200,
-      balanceDue: 200,
-      items: [
-        { size: '5x7"', thickness: 1, quantity: BigInt(2), unitPrice: 200 },
-      ],
-    },
-  ];
 }
 
 // ---- Business Profile ----

@@ -18,10 +18,11 @@ export function useSuppliers() {
     setSuppliers(getLocalSuppliers());
   }, []);
 
-  const addSupplier = useCallback((name: string) => {
+  const addSupplier = useCallback((name: string, phone?: string) => {
     const supplier: Supplier = {
       id: `supplier-${Date.now()}`,
       name,
+      phone,
       transactions: [],
       createdAt: Date.now(),
     };
@@ -62,10 +63,19 @@ export function useSuppliers() {
     [refresh],
   );
 
+  const updateSupplierPhone = useCallback((id: string, phone: string) => {
+    const next = getLocalSuppliers().map((s) =>
+      s.id === id ? { ...s, phone } : s,
+    );
+    saveLocalSuppliers(next);
+    setSuppliers(next);
+  }, []);
+
   return {
     suppliers,
     refresh,
     addSupplier,
+    updateSupplierPhone,
     renameSupplier,
     deleteSupplier,
     addTransaction,

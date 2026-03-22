@@ -8,13 +8,21 @@ import {
   Users,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Inventory from "./components/Inventory";
 import Khatabook from "./components/Khatabook";
+import LockScreen from "./components/LockScreen";
 import Reports from "./components/Reports";
 import Settings from "./components/Settings";
 import SmartBilling from "./components/SmartBilling";
 import SupplierLedger from "./components/SupplierLedger";
+import { getFeatureFlags } from "./hooks/useFeatureFlags";
+import {
+  getAppPin,
+  getBusinessProfile,
+  isSessionUnlocked,
+  setSessionUnlocked,
+} from "./utils/localStorage";
 
 type Module =
   | "billing"
@@ -65,6 +73,42 @@ const MODULES = [
 
 export default function App() {
   const [activeModule, setActiveModule] = useState<Module>("billing");
+  const [logoSrc, setLogoSrc] = useState("");
+  const [businessName, setBusinessName] = useState("The Digital Gallery");
+  const [featureFlags, setFeatureFlags] = useState(getFeatureFlags);
+  const [appPin, setAppPin] = useState(() => getAppPin());
+  const [unlocked, setUnlocked] = useState(() => {
+    const pin = getAppPin();
+    if (!pin) return true;
+    return isSessionUnlocked();
+  });
+
+  // Reload profile logo whenever the user navigates (catches Settings saves)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    const profile = getBusinessProfile();
+    setLogoSrc(
+      profile.logoBase64 ||
+        "/assets/generated/gallery-logo-transparent.dim_200x200.png",
+    );
+    setBusinessName(profile.businessName || "The Digital Gallery by Emon");
+    const flags = getFeatureFlags();
+    setFeatureFlags(flags);
+    setAppPin(getAppPin());
+  }, [activeModule]);
+
+  // Show lock screen if PIN is set and session not unlocked
+  if (appPin && !unlocked) {
+    return (
+      <LockScreen
+        onUnlock={() => {
+          setSessionUnlocked(true);
+          setUnlocked(true);
+        }}
+        storedPin={appPin}
+      />
+    );
+  }
 
   const renderModule = () => {
     switch (activeModule) {
@@ -79,7 +123,19 @@ export default function App() {
       case "reports":
         return <Reports />;
       case "settings":
-        return <Settings />;
+        return (
+          <Settings
+            onProfileSaved={() => {
+              const p = getBusinessProfile();
+              setLogoSrc(
+                p.logoBase64 ||
+                  "/assets/generated/gallery-logo-transparent.dim_200x200.png",
+              );
+              setBusinessName(p.businessName || "The Digital Gallery by Emon");
+              setAppPin(getAppPin());
+            }}
+          />
+        );
     }
   };
 
@@ -94,29 +150,41 @@ export default function App() {
           <div className="p-5 border-b border-border">
             <div className="flex items-center gap-2.5">
               <img
-                src="/assets/generated/gallery-logo-transparent.dim_200x200.png"
+                src={logoSrc}
                 alt="The Digital Gallery"
-                className="w-9 h-9 object-contain"
+                className="w-9 h-9 object-contain rounded"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
+                  (e.target as HTMLImageElement).src =
+                    "/assets/generated/gallery-logo-transparent.dim_200x200.png";
                 }}
               />
               <div>
                 <p className="font-serif text-sm font-bold text-foreground leading-tight">
-                  The Digital
+                  {businessName.split(" ").slice(0, 3).join(" ")}
                 </p>
-                <p className="font-serif text-sm font-bold text-[#436B95] leading-tight">
-                  Gallery
+                <p
+                  className="text-[10px] text-[#436B95] leading-tight"
+                  style={{
+                    fontFamily: "'Poppins', sans-serif",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  by EMON
                 </p>
               </div>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">
-              by Emon — Business OS
+              Business OS
             </p>
           </div>
 
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            {MODULES.map((mod) => {
+            {MODULES.filter(
+              (m) =>
+                m.id === "billing" ||
+                m.id === "settings" ||
+                featureFlags[m.id as keyof typeof featureFlags] !== false,
+            ).map((mod) => {
               const Icon = mod.icon;
               const isActive = activeModule === mod.id;
               return (
@@ -155,8 +223,16 @@ export default function App() {
         <div className="flex-1 flex flex-col min-h-screen">
           <header className="bg-card border-b border-border px-8 py-4 sticky top-0 z-10">
             <h1 className="font-serif text-xl font-bold text-foreground">
-              The Digital Gallery{" "}
-              <span className="text-[#436B95]">by Emon</span>
+              The Digital Gallery
+              <span
+                className="text-xs text-[#436B95] font-normal ml-2"
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                by EMON
+              </span>
             </h1>
           </header>
 
@@ -183,18 +259,27 @@ export default function App() {
         <header className="bg-card border-b border-border px-4 py-3 sticky top-0 z-20 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img
-              src="/assets/generated/gallery-logo-transparent.dim_200x200.png"
+              src={logoSrc}
               alt="Logo"
-              className="w-7 h-7 object-contain"
+              className="w-8 h-8 object-contain rounded"
               onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
+                (e.target as HTMLImageElement).src =
+                  "/assets/generated/gallery-logo-transparent.dim_200x200.png";
               }}
             />
             <h1 className="font-serif text-base font-bold text-foreground">
-              The Digital <span className="text-[#436B95]">Gallery</span>
+              The Digital Gallery
             </h1>
           </div>
-          <p className="text-xs text-muted-foreground">by Emon</p>
+          <p
+            className="text-[10px] text-[#436B95]"
+            style={{
+              fontFamily: "'Poppins', sans-serif",
+              letterSpacing: "0.05em",
+            }}
+          >
+            by EMON
+          </p>
         </header>
 
         <main className="flex-1 px-4 py-5 pb-24 overflow-y-auto">
@@ -212,7 +297,12 @@ export default function App() {
           className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center z-30"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          {MODULES.map((mod) => {
+          {MODULES.filter(
+            (m) =>
+              m.id === "billing" ||
+              m.id === "settings" ||
+              featureFlags[m.id as keyof typeof featureFlags] !== false,
+          ).map((mod) => {
             const Icon = mod.icon;
             const isActive = activeModule === mod.id;
             return (

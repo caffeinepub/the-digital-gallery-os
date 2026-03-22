@@ -35,33 +35,48 @@ function formatDate(ts: number) {
   });
 }
 
-function AddSupplierForm({ onAdd }: { onAdd: (name: string) => void }) {
+function AddSupplierForm({
+  onAdd,
+}: { onAdd: (name: string, phone?: string) => void }) {
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onAdd(name.trim());
+    onAdd(name.trim(), phone.trim() || undefined);
     setName("");
+    setPhone("");
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <Input
-        placeholder="Supplier name (e.g. Glass Dealer)"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="flex-1 bg-background border-border"
-        data-ocid="supplier.input"
-      />
-      <Button
-        type="submit"
-        className="bg-[#436B95] hover:bg-[#355578] text-white"
-        data-ocid="supplier.submit_button"
-      >
-        <Plus className="h-4 w-4 mr-1" />
-        Add
-      </Button>
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="flex gap-2">
+        <Input
+          placeholder="Supplier name (e.g. Glass Dealer)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="flex-1 bg-background border-border"
+          data-ocid="supplier.input"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Input
+          placeholder="+91 XXXXX XXXXX (optional)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="flex-1 bg-background border-border"
+          data-ocid="supplier.input"
+        />
+        <Button
+          type="submit"
+          className="bg-[#436B95] hover:bg-[#355578] text-white"
+          data-ocid="supplier.submit_button"
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Add
+        </Button>
+      </div>
     </form>
   );
 }
@@ -158,6 +173,7 @@ function SupplierDetail({
   onBack,
   onAddTransaction,
   onDeleteTransaction,
+  onUpdatePhone,
 }: {
   supplier: Supplier;
   onBack: () => void;
@@ -166,10 +182,13 @@ function SupplierDetail({
     tx: Omit<SupplierTransaction, "id">,
   ) => void;
   onDeleteTransaction: (supplierId: string, txId: string) => void;
+  onUpdatePhone: (id: string, phone: string) => void;
 }) {
   const [activeForm, setActiveForm] = useState<"purchase" | "payment" | null>(
     null,
   );
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneValue, setPhoneValue] = useState(supplier.phone ?? "");
   const { purchases, payments, outstanding } = calcBalance(supplier);
   const sorted = [...supplier.transactions].sort((a, b) => b.date - a.date);
 
@@ -206,7 +225,48 @@ function SupplierDetail({
           <h3 className="font-serif text-xl font-bold text-foreground">
             {supplier.name}
           </h3>
-          <p className="text-xs text-muted-foreground">Supplier ledger</p>
+          {editingPhone ? (
+            <div className="flex items-center gap-1 mt-1">
+              <input
+                value={phoneValue}
+                onChange={(e) => setPhoneValue(e.target.value)}
+                placeholder="+91 XXXXX XXXXX"
+                className="text-xs border border-border rounded px-2 py-0.5 bg-background w-40"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdatePhone(supplier.id, phoneValue);
+                  setEditingPhone(false);
+                  toast.success("Phone updated");
+                }}
+                className="p-0.5 rounded hover:bg-green-50 text-green-600"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingPhone(false)}
+                className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 mt-0.5">
+              <p className="text-xs text-muted-foreground">
+                {supplier.phone || "Supplier ledger"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditingPhone(true)}
+                className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                title="Edit phone"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -359,6 +419,7 @@ export default function SupplierLedger() {
     deleteSupplier,
     addTransaction,
     deleteTransaction,
+    updateSupplierPhone,
   } = useSuppliers();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -368,8 +429,8 @@ export default function SupplierLedger() {
 
   const selectedSupplier = suppliers.find((s) => s.id === selectedId) ?? null;
 
-  const handleAddSupplier = (name: string) => {
-    addSupplier(name);
+  const handleAddSupplier = (name: string, phone?: string) => {
+    addSupplier(name, phone);
     setShowAddForm(false);
     toast.success(`${name} added!`);
   };
@@ -416,6 +477,7 @@ export default function SupplierLedger() {
           onBack={() => setSelectedId(null)}
           onAddTransaction={addTransaction}
           onDeleteTransaction={deleteTransaction}
+          onUpdatePhone={updateSupplierPhone}
         />
       </div>
     );
@@ -593,9 +655,16 @@ export default function SupplierLedger() {
                             </button>
                           </div>
                         ) : (
-                          <span className="font-medium text-foreground">
-                            {s.name}
-                          </span>
+                          <div>
+                            <span className="font-medium text-foreground">
+                              {s.name}
+                            </span>
+                            {s.phone && (
+                              <p className="text-xs text-muted-foreground">
+                                {s.phone}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="py-3 px-4 text-right text-red-600 font-medium">
@@ -687,7 +756,16 @@ export default function SupplierLedger() {
                         </button>
                       </div>
                     ) : (
-                      <p className="font-semibold text-foreground">{s.name}</p>
+                      <>
+                        <p className="font-semibold text-foreground">
+                          {s.name}
+                        </p>
+                        {s.phone && (
+                          <p className="text-xs text-muted-foreground">
+                            {s.phone}
+                          </p>
+                        )}
+                      </>
                     )}
                     {!isRenaming && (
                       <div className="flex gap-1">

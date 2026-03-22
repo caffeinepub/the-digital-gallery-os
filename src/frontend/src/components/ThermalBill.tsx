@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Printer, X } from "lucide-react";
+import { MessageCircle, Printer, Share2, X } from "lucide-react";
 import ReactDOM from "react-dom";
+import { toast } from "sonner";
 import { getBusinessProfile } from "../utils/localStorage";
 
 interface ThermalBillOrder {
@@ -43,6 +44,89 @@ export default function ThermalBill({
   const netAmount = order.totalAmount;
   const subtotal = netAmount + discount;
 
+  const handleShareAsImage = async () => {
+    const el = document.getElementById("thermal-bill-capture");
+    if (!el) return;
+    // Load html2canvas from CDN if not bundled
+    let html2canvas: (
+      el: HTMLElement,
+      opts?: object,
+    ) => Promise<HTMLCanvasElement>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mod =
+        (await (window as any).loadHtml2Canvas?.()) ??
+        new Promise<any>((res, rej) => {
+          if ((window as any).html2canvas) {
+            res((window as any).html2canvas);
+            return;
+          }
+          const s = document.createElement("script");
+          s.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+          s.onload = () => res((window as any).html2canvas);
+          s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      html2canvas = mod;
+    } catch {
+      toast.error(
+        "Could not load image export library. Try copying bill text instead.",
+      );
+      return;
+    }
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+    let quality = 0.85;
+    let blob: Blob | null = null as Blob | null;
+    await new Promise<void>((resolve) => {
+      canvas.toBlob(
+        (b) => {
+          blob = b;
+          resolve();
+        },
+        "image/jpeg",
+        quality,
+      );
+    });
+    if (blob && blob.size > 1.5 * 1024 * 1024) {
+      quality = 0.6;
+      await new Promise<void>((resolve) => {
+        canvas.toBlob(
+          (b) => {
+            blob = b;
+            resolve();
+          },
+          "image/jpeg",
+          quality,
+        );
+      });
+    }
+    if (!blob) return;
+    const file = new File([blob], `bill-${billNo}.jpg`, { type: "image/jpeg" });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: `Bill #${billNo} - ${order.customerName}`,
+        });
+        return;
+      } catch {
+        /* cancelled */
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bill-${billNo}.jpg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handlePrint = () => window.print();
 
   const handleWhatsApp = () => {
@@ -61,6 +145,8 @@ export default function ThermalBill({
   )
     .split(",")
     .map((s) => s.trim());
+
+  const logoSrc = profile.logoBase64 || "";
 
   const receiptContent = (
     <>
@@ -83,6 +169,18 @@ export default function ThermalBill({
           }}
         >
           <div style={{ textAlign: "center", marginBottom: "6px" }}>
+            {logoSrc && (
+              <img
+                src={logoSrc}
+                alt="Logo"
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  objectFit: "contain",
+                  margin: "0 auto 4px",
+                }}
+              />
+            )}
             <div
               style={{
                 fontSize: "13px",
@@ -251,10 +349,19 @@ export default function ThermalBill({
         </button>
 
         <div
+          id="thermal-bill-capture"
           className="bg-white rounded border border-gray-200 font-mono text-black text-xs overflow-hidden"
           style={{ maxWidth: "320px", margin: "0 auto" }}
         >
+          {/* Logo + header */}
           <div className="text-center px-4 pt-5 pb-3">
+            {logoSrc && (
+              <img
+                src={logoSrc}
+                alt="Logo"
+                className="w-12 h-12 object-contain mx-auto mb-2"
+              />
+            )}
             <div className="font-bold text-sm tracking-wider uppercase">
               {profile.businessName || "THE DIGITAL GALLERY BY EMON"}
             </div>
@@ -363,6 +470,14 @@ export default function ThermalBill({
           >
             <Printer className="mr-2 h-4 w-4" />
             Print Bill
+          </Button>
+          <Button
+            onClick={handleShareAsImage}
+            className="flex-1 bg-[#436B95] hover:bg-[#355578] text-white font-medium h-10 rounded-lg"
+            data-ocid="thermal.share_button"
+          >
+            <Share2 className="mr-2 h-4 w-4" />
+            Share Image
           </Button>
           {order.customerPhone && (
             <Button

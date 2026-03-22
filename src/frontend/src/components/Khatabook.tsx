@@ -1,3 +1,14 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,12 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle2, Clock, CreditCard, Receipt, Truck } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Receipt,
+  Trash2,
+  Truck,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type CustomerOrder, OrderStatus } from "../backend";
 import {
+  useDeleteOrder,
   useGetAllOrders,
   useSettleBalance,
   useUpdateOrderStatus,
@@ -61,6 +80,7 @@ function OrderCard({
 }) {
   const updateStatus = useUpdateOrderStatus();
   const settleBalance = useSettleBalance();
+  const deleteOrder = useDeleteOrder();
 
   const handleSettle = async () => {
     await settleBalance.mutateAsync({
@@ -186,6 +206,40 @@ function OrderCard({
           <Receipt className="h-3 w-3 mr-1" />
           Bill
         </Button>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-500"
+              data-ocid="khatabook.delete_button"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this record?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Remove {order.customerName}'s order from Khatabook? This cannot
+                be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  await deleteOrder.mutateAsync(order.id);
+                  toast.success(`${order.customerName}'s record deleted`);
+                }}
+                className="bg-red-500 hover:bg-red-600"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
@@ -350,6 +404,7 @@ function DesktopOrderRow({
 }) {
   const updateStatus = useUpdateOrderStatus();
   const settleBalance = useSettleBalance();
+  const deleteOrder = useDeleteOrder();
 
   const dateStr = new Date(
     Number(order.orderDate) / 1_000_000,
@@ -437,6 +492,39 @@ function DesktopOrderRow({
             <Receipt className="h-3 w-3 mr-1" />
             Bill
           </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-500"
+                data-ocid="khatabook.delete_button"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this record?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Remove {order.customerName}'s order from Khatabook? This
+                  cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    await deleteOrder.mutateAsync(order.id);
+                    toast.success(`${order.customerName}'s record deleted`);
+                  }}
+                  className="bg-red-500 hover:bg-red-600"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </td>
     </tr>
