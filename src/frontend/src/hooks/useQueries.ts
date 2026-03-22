@@ -8,35 +8,26 @@ import {
   getLocalInventory,
   getLocalOrders,
   saveLocalInventory,
-  saveLocalOrders,
   setLocalStock,
   settleLocalBalance,
   updateLocalOrderStatus,
 } from "../utils/localStorage";
 import { useActor } from "./useActor";
 
+type LocalOrder = CustomerOrder & {
+  customerPhone?: string;
+  deliveryAddress?: string;
+  billNumber?: number;
+};
+
+// Always use localStorage as source of truth.
+// Backend sync is write-only (we push to backend but never let it overwrite local).
 export function useGetAllOrders() {
-  const { actor, isFetching } = useActor();
-  return useQuery<CustomerOrder[]>({
+  return useQuery<LocalOrder[]>({
     queryKey: ["orders"],
-    queryFn: async () => {
-      try {
-        if (!actor) return getLocalOrders();
-        const orders = await actor.getAllOrders();
-        if (orders.length > 0) {
-          const sorted = [...orders].sort(
-            (a, b) => Number(b.orderDate) - Number(a.orderDate),
-          );
-          saveLocalOrders(sorted);
-          return sorted;
-        }
-        return getLocalOrders();
-      } catch {
-        return getLocalOrders();
-      }
-    },
-    enabled: !isFetching,
-    initialData: getLocalOrders,
+    queryFn: () => getLocalOrders() as LocalOrder[],
+    staleTime: 0,
+    initialData: () => getLocalOrders() as LocalOrder[],
   });
 }
 
@@ -49,6 +40,9 @@ export function useCreateOrder() {
       items: FramingItem[];
       totalAmount: number;
       advancePaid: number;
+      customerPhone?: string;
+      deliveryAddress?: string;
+      billNumber?: number;
     }) => {
       let id: bigint;
       try {
@@ -61,7 +55,7 @@ export function useCreateOrder() {
       } catch {
         id = BigInt(Date.now());
       }
-      const newOrder: CustomerOrder = {
+      const newOrder: LocalOrder = {
         id,
         customerName: data.customerName,
         status: OrderStatus.pending,
@@ -70,8 +64,11 @@ export function useCreateOrder() {
         advancePaid: data.advancePaid,
         balanceDue: data.totalAmount - data.advancePaid,
         items: data.items,
+        customerPhone: data.customerPhone,
+        deliveryAddress: data.deliveryAddress,
+        billNumber: data.billNumber,
       };
-      addLocalOrder(newOrder);
+      addLocalOrder(newOrder, data.customerPhone, data.deliveryAddress);
       return newOrder;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
@@ -85,10 +82,9 @@ export function useDeleteOrder() {
       deleteLocalOrder(id);
     },
     onSuccess: (_data, id) => {
-      qc.setQueryData(
-        ["orders"],
-        (old: (CustomerOrder & { customerPhone?: string })[] | undefined) =>
-          old ? old.filter((o) => String(o.id) !== String(id)) : [],
+      // Update cache immediately without refetch
+      qc.setQueryData(["orders"], (old: LocalOrder[] | undefined) =>
+        old ? old.filter((o) => String(o.id) !== String(id)) : [],
       );
     },
   });
@@ -103,7 +99,7 @@ export function useUpdateOrderStatus() {
       try {
         await actor?.updateOrderStatus(id, status);
       } catch {
-        /* local updated */
+        /* ok */
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
@@ -122,7 +118,7 @@ export function useSettleBalance() {
       try {
         await actor?.settleBalance(id, totalAmount);
       } catch {
-        /* local updated */
+        /* ok */
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
@@ -138,9 +134,7 @@ export function useGetAllInventory() {
         if (!actor) return getLocalInventory();
         const raw = await actor.getAllInventory();
         const inv: Record<string, number> = {};
-        for (const [size, count] of raw) {
-          inv[size] = Number(count);
-        }
+        for (const [size, count] of raw) inv[size] = Number(count);
         const merged = { ...getLocalInventory(), ...inv };
         saveLocalInventory(merged);
         return merged;
@@ -162,7 +156,7 @@ export function useIncrementStock() {
       try {
         await actor?.incrementStock(size, BigInt(1));
       } catch {
-        /* local updated */
+        /* ok */
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
@@ -178,7 +172,7 @@ export function useDecrementStock() {
       try {
         await actor?.decrementStock(size, BigInt(1));
       } catch {
-        /* local updated */
+        /* ok */
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
@@ -202,7 +196,7 @@ export function useAddSupplierNote() {
       try {
         await actor?.addSupplierNote(text);
       } catch {
-        /* local handled */
+        /* ok */
       }
     },
   });

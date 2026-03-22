@@ -194,6 +194,9 @@ export default function Inventory() {
     const count = inventory[size] ?? 0;
     const isLow = threshold > 0 && count <= threshold;
     const photo = photos[size];
+    const displayName = mountSizes.includes(size)
+      ? size.replace(" (Mount)", "")
+      : size;
     const isEditing = editingSize === size;
     const isRenaming = renamingSize === size;
 
@@ -257,7 +260,7 @@ export default function Inventory() {
             ) : (
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">
-                  {size}
+                  {displayName}
                 </p>
               </div>
             )}
@@ -291,7 +294,7 @@ export default function Inventory() {
               <>
                 {isLow && !isEditing && (
                   <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    Low
+                    Low Stock Alert
                   </span>
                 )}
 
@@ -528,7 +531,7 @@ export default function Inventory() {
       <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30">
           <h3 className="text-sm font-semibold text-foreground">
-            \ud83d\uddbc Plain Frames
+            Plain Frames
           </h3>
           <p className="text-xs text-muted-foreground">
             {plainSizes.length} sizes
@@ -559,7 +562,7 @@ export default function Inventory() {
       <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30">
           <h3 className="text-sm font-semibold text-foreground">
-            \ud83d\uddc2 Mount Frames
+            Mount Frames
           </h3>
           <p className="text-xs text-muted-foreground">
             {mountSizes.length} sizes

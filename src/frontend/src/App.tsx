@@ -71,10 +71,32 @@ const MODULES = [
   },
 ];
 
+function LogoMark({ src, size = 9 }: { src: string; size?: number }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  if (src && !imgFailed) {
+    return (
+      <img
+        src={src}
+        alt="Logo"
+        className={`w-${size} h-${size} object-contain rounded`}
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+  // Fallback initials badge
+  return (
+    <div
+      className={`w-${size} h-${size} rounded-lg bg-[#436B95] flex items-center justify-center shrink-0`}
+    >
+      <span className="text-white font-bold text-xs">DG</span>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeModule, setActiveModule] = useState<Module>("billing");
   const [logoSrc, setLogoSrc] = useState("");
-  const [businessName, setBusinessName] = useState("The Digital Gallery");
+  // businessName managed via profile
   const [featureFlags, setFeatureFlags] = useState(getFeatureFlags);
   const [appPin, setAppPin] = useState(() => getAppPin());
   const [unlocked, setUnlocked] = useState(() => {
@@ -83,21 +105,14 @@ export default function App() {
     return isSessionUnlocked();
   });
 
-  // Reload profile logo whenever the user navigates (catches Settings saves)
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
   useEffect(() => {
     const profile = getBusinessProfile();
-    setLogoSrc(
-      profile.logoBase64 ||
-        "/assets/generated/gallery-logo-transparent.dim_200x200.png",
-    );
-    setBusinessName(profile.businessName || "The Digital Gallery by Emon");
-    const flags = getFeatureFlags();
-    setFeatureFlags(flags);
+    setLogoSrc(profile.logoBase64 || "");
+    setFeatureFlags(getFeatureFlags());
     setAppPin(getAppPin());
   }, [activeModule]);
 
-  // Show lock screen if PIN is set and session not unlocked
   if (appPin && !unlocked) {
     return (
       <LockScreen
@@ -109,6 +124,13 @@ export default function App() {
       />
     );
   }
+
+  const visibleModules = MODULES.filter(
+    (m) =>
+      m.id === "billing" ||
+      m.id === "settings" ||
+      featureFlags[m.id as keyof typeof featureFlags] !== false,
+  );
 
   const renderModule = () => {
     switch (activeModule) {
@@ -127,11 +149,7 @@ export default function App() {
           <Settings
             onProfileSaved={() => {
               const p = getBusinessProfile();
-              setLogoSrc(
-                p.logoBase64 ||
-                  "/assets/generated/gallery-logo-transparent.dim_200x200.png",
-              );
-              setBusinessName(p.businessName || "The Digital Gallery by Emon");
+              setLogoSrc(p.logoBase64 || "");
               setAppPin(getAppPin());
             }}
           />
@@ -143,24 +161,15 @@ export default function App() {
     <div className="min-h-screen bg-background flex flex-col">
       <Toaster position="top-right" richColors />
 
-      {/* ─── DESKTOP LAYOUT ─── */}
+      {/* DESKTOP */}
       <div className="hidden md:flex min-h-screen">
-        {/* Sidebar */}
         <aside className="w-56 bg-card border-r border-border flex flex-col shrink-0 sticky top-0 h-screen">
           <div className="p-5 border-b border-border">
-            <div className="flex items-center gap-2.5">
-              <img
-                src={logoSrc}
-                alt="The Digital Gallery"
-                className="w-9 h-9 object-contain rounded"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    "/assets/generated/gallery-logo-transparent.dim_200x200.png";
-                }}
-              />
-              <div>
-                <p className="font-serif text-sm font-bold text-foreground leading-tight">
-                  {businessName.split(" ").slice(0, 3).join(" ")}
+            <div className="flex items-center gap-3">
+              <LogoMark src={logoSrc} size={9} />
+              <div className="min-w-0">
+                <p className="font-serif text-sm font-bold text-foreground leading-tight truncate">
+                  The Digital Gallery
                 </p>
                 <p
                   className="text-[10px] text-[#436B95] leading-tight"
@@ -173,18 +182,12 @@ export default function App() {
                 </p>
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">
+            <p className="text-[10px] text-muted-foreground mt-1.5">
               Business OS
             </p>
           </div>
-
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            {MODULES.filter(
-              (m) =>
-                m.id === "billing" ||
-                m.id === "settings" ||
-                featureFlags[m.id as keyof typeof featureFlags] !== false,
-            ).map((mod) => {
+            {visibleModules.map((mod) => {
               const Icon = mod.icon;
               const isActive = activeModule === mod.id;
               return (
@@ -200,28 +203,26 @@ export default function App() {
                   }`}
                 >
                   <Icon
-                    className={`h-4 w-4 shrink-0 ${
-                      isActive ? "text-[#436B95]" : ""
-                    }`}
+                    className={`h-4 w-4 shrink-0 ${isActive ? "text-[#436B95]" : ""}`}
                   />
                   {mod.label}
                 </button>
               );
             })}
           </nav>
-
           <div className="p-4 border-t border-border">
-            <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
+            <p className="text-[10px] text-muted-foreground text-center">
               📞 +91 93652 46096
             </p>
-            <p className="text-[10px] text-muted-foreground text-center leading-relaxed mt-0.5">
+            <p className="text-[10px] text-muted-foreground text-center mt-0.5">
               Kokrajhar · Bongaigaon · Barpeta Road
             </p>
           </div>
         </aside>
 
         <div className="flex-1 flex flex-col min-h-screen">
-          <header className="bg-card border-b border-border px-8 py-4 sticky top-0 z-10">
+          <header className="bg-card border-b border-border px-8 py-4 sticky top-0 z-10 flex items-center gap-3">
+            <LogoMark src={logoSrc} size={8} />
             <h1 className="font-serif text-xl font-bold text-foreground">
               The Digital Gallery
               <span
@@ -235,12 +236,10 @@ export default function App() {
               </span>
             </h1>
           </header>
-
           <main className="flex-1 p-8 max-w-4xl w-full">{renderModule()}</main>
-
           <footer className="border-t border-border px-8 py-4 text-center">
             <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()}. Built with love using{" "}
+              © {new Date().getFullYear()}. Built with{" "}
               <a
                 href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
                 target="_blank"
@@ -254,19 +253,11 @@ export default function App() {
         </div>
       </div>
 
-      {/* ─── MOBILE LAYOUT ─── */}
+      {/* MOBILE */}
       <div className="flex flex-col md:hidden min-h-screen">
         <header className="bg-card border-b border-border px-4 py-3 sticky top-0 z-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img
-              src={logoSrc}
-              alt="Logo"
-              className="w-8 h-8 object-contain rounded"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "/assets/generated/gallery-logo-transparent.dim_200x200.png";
-              }}
-            />
+          <div className="flex items-center gap-2.5">
+            <LogoMark src={logoSrc} size={8} />
             <h1 className="font-serif text-base font-bold text-foreground">
               The Digital Gallery
             </h1>
@@ -281,7 +272,6 @@ export default function App() {
             by EMON
           </p>
         </header>
-
         <main className="flex-1 px-4 py-5 pb-24 overflow-y-auto">
           <motion.div
             key={activeModule}
@@ -292,17 +282,11 @@ export default function App() {
             {renderModule()}
           </motion.div>
         </main>
-
         <nav
           className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center z-30"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          {MODULES.filter(
-            (m) =>
-              m.id === "billing" ||
-              m.id === "settings" ||
-              featureFlags[m.id as keyof typeof featureFlags] !== false,
-          ).map((mod) => {
+          {visibleModules.map((mod) => {
             const Icon = mod.icon;
             const isActive = activeModule === mod.id;
             return (

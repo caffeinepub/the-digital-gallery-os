@@ -9,7 +9,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -37,6 +36,12 @@ import {
   useUpdateOrderStatus,
 } from "../hooks/useQueries";
 import ThermalBill from "./ThermalBill";
+
+type LocalOrder = CustomerOrder & {
+  customerPhone?: string;
+  deliveryAddress?: string;
+  billNumber?: number;
+};
 
 const STATUS_CONFIG = {
   [OrderStatus.pending]: {
@@ -71,32 +76,11 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 
 function OrderCard({
   order,
-  index,
   onShowBill,
-}: {
-  order: CustomerOrder & { customerPhone?: string };
-  index: number;
-  onShowBill: (order: CustomerOrder & { customerPhone?: string }) => void;
-}) {
+}: { order: LocalOrder; onShowBill: (o: LocalOrder) => void }) {
   const updateStatus = useUpdateOrderStatus();
   const settleBalance = useSettleBalance();
   const deleteOrder = useDeleteOrder();
-
-  const handleSettle = async () => {
-    await settleBalance.mutateAsync({
-      id: order.id,
-      totalAmount: order.totalAmount,
-    });
-    toast.success(`Balance settled for ${order.customerName}`);
-  };
-
-  const handleStatusChange = async (val: string) => {
-    await updateStatus.mutateAsync({
-      id: order.id,
-      status: val as OrderStatus,
-    });
-    toast.success("Status updated");
-  };
 
   const dateStr = new Date(
     Number(order.orderDate) / 1_000_000,
@@ -105,35 +89,44 @@ function OrderCard({
     month: "short",
     year: "numeric",
   });
-
-  const sizeLabel = order.items
-    .map((i) => `${i.size} (${i.thickness}")`)
-    .join(", ");
+  const billLabel = order.billNumber
+    ? `#${String(order.billNumber).padStart(4, "0")}`
+    : `#${String(order.id).slice(-4)}`;
 
   return (
     <div
-      className="bg-card border border-border rounded-xl shadow-card p-4 space-y-3"
-      data-ocid={`khatabook.item.${index}`}
+      className="bg-card border border-border rounded-xl p-4 space-y-3"
+      data-ocid="khatabook.card"
     >
-      {/* Top row */}
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-semibold text-foreground text-sm">
-            {order.customerName}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {dateStr} · {sizeLabel}
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold text-[#436B95]">
+              {billLabel}
+            </span>
+            <p className="font-semibold text-foreground text-sm">
+              {order.customerName}
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">{dateStr}</p>
           {order.customerPhone && (
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground">
               📞 {order.customerPhone}
+            </p>
+          )}
+          {order.deliveryAddress && (
+            <p className="text-xs text-muted-foreground">
+              📍 {order.deliveryAddress}
             </p>
           )}
         </div>
         <StatusBadge status={order.status} />
       </div>
 
-      {/* Amount row */}
+      <div className="text-xs text-muted-foreground">
+        {order.items.map((i) => i.size).join(", ")}
+      </div>
+
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="bg-muted/40 rounded-lg py-2">
           <p className="text-xs text-muted-foreground">Total</p>
@@ -148,7 +141,7 @@ function OrderCard({
           </p>
         </div>
         <div
-          className={`rounded-lg py-2 ${order.balanceDue > 0 ? "bg-[#8B8589]/10" : "bg-muted/40"}`}
+          className={`rounded-lg py-2 ${order.balanceDue > 0 ? "bg-[#436B95]/10" : "bg-muted/40"}`}
         >
           <p
             className={`text-xs ${order.balanceDue > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
@@ -163,11 +156,16 @@ function OrderCard({
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex gap-2">
         <Select
           value={order.status}
-          onValueChange={handleStatusChange}
+          onValueChange={async (val) => {
+            await updateStatus.mutateAsync({
+              id: order.id,
+              status: val as OrderStatus,
+            });
+            toast.success("Status updated");
+          }}
           disabled={updateStatus.isPending}
         >
           <SelectTrigger
@@ -186,13 +184,18 @@ function OrderCard({
         {order.balanceDue > 0 && (
           <Button
             size="sm"
-            onClick={handleSettle}
+            onClick={async () => {
+              await settleBalance.mutateAsync({
+                id: order.id,
+                totalAmount: order.totalAmount,
+              });
+              toast.success("Balance settled");
+            }}
             disabled={settleBalance.isPending}
             className="h-8 text-xs bg-[#436B95] hover:bg-[#355578] text-white px-3"
             data-ocid="khatabook.confirm_button"
           >
-            <CreditCard className="h-3 w-3 mr-1" />
-            Settle
+            <CreditCard className="h-3 w-3 mr-1" /> Settle
           </Button>
         )}
 
@@ -200,11 +203,10 @@ function OrderCard({
           size="sm"
           variant="outline"
           onClick={() => onShowBill(order)}
-          className="h-8 text-xs border-border hover:bg-[#8B8589]/10 text-foreground px-3"
+          className="h-8 text-xs border-border hover:bg-muted px-3"
           data-ocid="khatabook.secondary_button"
         >
-          <Receipt className="h-3 w-3 mr-1" />
-          Bill
+          <Receipt className="h-3 w-3 mr-1" /> Bill
         </Button>
 
         <AlertDialog>
@@ -222,8 +224,7 @@ function OrderCard({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete this record?</AlertDialogTitle>
               <AlertDialogDescription>
-                Remove {order.customerName}'s order from Khatabook? This cannot
-                be undone.
+                Remove {order.customerName}'s order permanently?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -247,9 +248,7 @@ function OrderCard({
 
 export default function Khatabook() {
   const { data: orders = [], isLoading } = useGetAllOrders();
-  const [thermalOrder, setThermalOrder] = useState<
-    (CustomerOrder & { customerPhone?: string }) | null
-  >(null);
+  const [thermalOrder, setThermalOrder] = useState<LocalOrder | null>(null);
 
   const totalBalance = orders.reduce((sum, o) => sum + o.balanceDue, 0);
   const pendingCount = orders.filter(
@@ -273,15 +272,14 @@ export default function Khatabook() {
         </p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-[#8B8589]/10 border border-border rounded-xl shadow-card p-4">
+        <div className="bg-[#436B95]/10 border border-border rounded-xl p-4">
           <p className="text-xs text-muted-foreground">Total Balance Due</p>
           <p className="text-xl font-bold text-[#436B95] font-serif mt-0.5">
             ₹{totalBalance.toLocaleString("en-IN")}
           </p>
         </div>
-        <div className="bg-card border border-border rounded-xl shadow-card p-4">
+        <div className="bg-card border border-border rounded-xl p-4">
           <p className="text-xs text-muted-foreground">Pending Orders</p>
           <p className="text-xl font-bold text-foreground font-serif mt-0.5">
             {pendingCount}
@@ -289,55 +287,44 @@ export default function Khatabook() {
         </div>
       </div>
 
-      {/* Desktop Table */}
-      <div className="hidden md:block bg-card border border-border rounded-xl shadow-card overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden md:block bg-card border border-border rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-[#8B8589]/10 border-b border-border">
-              <th className="text-left py-3 px-4 font-semibold text-foreground">
-                Customer
-              </th>
-              <th className="text-left py-3 px-4 font-semibold text-foreground">
-                Date
-              </th>
-              <th className="text-left py-3 px-4 font-semibold text-foreground">
-                Items
-              </th>
-              <th className="text-left py-3 px-4 font-semibold text-foreground">
-                Status
-              </th>
-              <th className="text-right py-3 px-4 font-semibold text-foreground">
-                Total
-              </th>
-              <th className="text-right py-3 px-4 font-semibold text-foreground">
-                Advance
-              </th>
-              <th className="text-right py-3 px-4 font-semibold text-foreground">
-                Balance
-              </th>
-              <th className="text-right py-3 px-4 font-semibold text-foreground">
-                Action
-              </th>
+            <tr className="bg-muted/40 border-b border-border">
+              {[
+                "Bill",
+                "Customer",
+                "Date",
+                "Items",
+                "Status",
+                "Total",
+                "Advance",
+                "Balance",
+                "Actions",
+              ].map((h) => (
+                <th
+                  key={h}
+                  className={`py-3 px-3 font-semibold text-foreground ${h === "Total" || h === "Advance" || h === "Balance" || h === "Actions" ? "text-right" : "text-left"}`}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-8 text-muted-foreground"
-                  data-ocid="khatabook.loading_state"
                 >
-                  Loading orders...
+                  Loading...
                 </td>
               </tr>
             ) : orders.length === 0 ? (
               <tr>
-                <td
-                  colSpan={8}
-                  className="text-center py-12"
-                  data-ocid="khatabook.empty_state"
-                >
+                <td colSpan={9} className="text-center py-12">
                   <p className="text-muted-foreground">No orders yet</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Create your first bill in Smart Billing
@@ -346,7 +333,7 @@ export default function Khatabook() {
               </tr>
             ) : (
               orders.map((order, i) => (
-                <DesktopOrderRow
+                <DesktopRow
                   key={String(order.id)}
                   order={order}
                   index={i + 1}
@@ -358,25 +345,21 @@ export default function Khatabook() {
         </table>
       </div>
 
-      {/* Mobile Cards */}
+      {/* Mobile cards */}
       <div className="md:hidden space-y-3">
         {isLoading ? (
-          <div
-            className="text-center py-8 text-muted-foreground"
-            data-ocid="khatabook.loading_state"
-          >
+          <div className="text-center py-8 text-muted-foreground">
             Loading...
           </div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-12" data-ocid="khatabook.empty_state">
-            <p className="text-muted-foreground">No orders yet</p>
+          <div className="text-center py-12 text-muted-foreground">
+            No orders yet
           </div>
         ) : (
-          orders.map((order, i) => (
+          orders.map((order) => (
             <OrderCard
               key={String(order.id)}
               order={order}
-              index={i + 1}
               onShowBill={setThermalOrder}
             />
           ))
@@ -386,6 +369,7 @@ export default function Khatabook() {
       {thermalOrder && (
         <ThermalBill
           order={thermalOrder}
+          billNumber={thermalOrder.billNumber}
           onClose={() => setThermalOrder(null)}
         />
       )}
@@ -393,33 +377,31 @@ export default function Khatabook() {
   );
 }
 
-function DesktopOrderRow({
+function DesktopRow({
   order,
   index,
   onShowBill,
-}: {
-  order: CustomerOrder & { customerPhone?: string };
-  index: number;
-  onShowBill: (order: CustomerOrder & { customerPhone?: string }) => void;
-}) {
+}: { order: LocalOrder; index: number; onShowBill: (o: LocalOrder) => void }) {
   const updateStatus = useUpdateOrderStatus();
   const settleBalance = useSettleBalance();
   const deleteOrder = useDeleteOrder();
 
   const dateStr = new Date(
     Number(order.orderDate) / 1_000_000,
-  ).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-  });
-  const sizeLabel = order.items.map((i) => `${i.size}`).join(", ");
+  ).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  const billLabel = order.billNumber
+    ? `#${String(order.billNumber).padStart(4, "0")}`
+    : `#${String(order.id).slice(-4)}`;
 
   return (
     <tr
       className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
       data-ocid={`khatabook.row.${index}`}
     >
-      <td className="py-3 px-4 font-medium text-foreground">
+      <td className="py-3 px-3 font-mono text-xs font-bold text-[#436B95]">
+        {billLabel}
+      </td>
+      <td className="py-3 px-3 font-medium text-foreground">
         <div>{order.customerName}</div>
         {order.customerPhone && (
           <div className="text-xs text-muted-foreground">
@@ -427,9 +409,11 @@ function DesktopOrderRow({
           </div>
         )}
       </td>
-      <td className="py-3 px-4 text-muted-foreground">{dateStr}</td>
-      <td className="py-3 px-4 text-muted-foreground text-xs">{sizeLabel}</td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-3 text-muted-foreground text-xs">{dateStr}</td>
+      <td className="py-3 px-3 text-muted-foreground text-xs max-w-[120px] truncate">
+        {order.items.map((i) => i.size).join(", ")}
+      </td>
+      <td className="py-3 px-3">
         <Select
           value={order.status}
           onValueChange={async (val) => {
@@ -453,18 +437,18 @@ function DesktopOrderRow({
           </SelectContent>
         </Select>
       </td>
-      <td className="py-3 px-4 text-right font-medium">
+      <td className="py-3 px-3 text-right font-medium">
         ₹{order.totalAmount.toLocaleString("en-IN")}
       </td>
-      <td className="py-3 px-4 text-right text-green-600 font-medium">
+      <td className="py-3 px-3 text-right text-green-600 font-medium">
         ₹{order.advancePaid.toLocaleString("en-IN")}
       </td>
       <td
-        className={`py-3 px-4 text-right font-bold ${order.balanceDue > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
+        className={`py-3 px-3 text-right font-bold ${order.balanceDue > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
       >
         ₹{order.balanceDue.toLocaleString("en-IN")}
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-3">
         <div className="flex justify-end gap-1.5">
           {order.balanceDue > 0 && (
             <Button
@@ -474,7 +458,7 @@ function DesktopOrderRow({
                   id: order.id,
                   totalAmount: order.totalAmount,
                 });
-                toast.success(`Balance settled for ${order.customerName}`);
+                toast.success("Balance settled");
               }}
               className="h-7 text-xs bg-[#436B95] hover:bg-[#355578] text-white px-2"
               data-ocid="khatabook.confirm_button"
@@ -486,11 +470,10 @@ function DesktopOrderRow({
             size="sm"
             variant="outline"
             onClick={() => onShowBill(order)}
-            className="h-7 text-xs border-border hover:bg-[#8B8589]/10 text-foreground px-2"
+            className="h-7 text-xs px-2"
             data-ocid="khatabook.secondary_button"
           >
-            <Receipt className="h-3 w-3 mr-1" />
-            Bill
+            <Receipt className="h-3 w-3 mr-1" /> Bill
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -507,8 +490,7 @@ function DesktopOrderRow({
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete this record?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Remove {order.customerName}'s order from Khatabook? This
-                  cannot be undone.
+                  Remove {order.customerName}'s order permanently?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

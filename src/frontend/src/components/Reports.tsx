@@ -32,9 +32,11 @@ function monthLabel(key: string): string {
 function getLast12Months(): string[] {
   const result: string[] = [];
   const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  const startDate = new Date(2026, 0, 1); // Business started Jan 2026
+  let d = new Date(now.getFullYear(), now.getMonth(), 1);
+  while (d >= startDate) {
     result.push(formatMonthKey(d));
+    d = new Date(d.getFullYear(), d.getMonth() - 1, 1);
   }
   return result;
 }

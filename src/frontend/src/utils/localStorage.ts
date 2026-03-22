@@ -13,6 +13,7 @@ const KEYS = {
   inventorySizes: "gallery_inventory_sizes",
   appPin: "dg_app_pin",
   lowStockThreshold: "dg_low_stock_threshold",
+  billCounter: "dg_bill_counter",
 };
 
 export const DEFAULT_PLAIN_SIZES = [
@@ -39,6 +40,28 @@ export const DEFAULT_FRAME_SIZES = [
   ...DEFAULT_PLAIN_SIZES,
   ...DEFAULT_MOUNT_SIZES,
 ];
+
+// ---- Bill Counter (sequential bill numbers) ----
+export function getNextBillNumber(): number {
+  try {
+    const raw = localStorage.getItem(KEYS.billCounter);
+    const current = raw ? Number.parseInt(raw, 10) : 0;
+    const next = current + 1;
+    localStorage.setItem(KEYS.billCounter, String(next));
+    return next;
+  } catch {
+    return Date.now() % 9999;
+  }
+}
+
+export function getCurrentBillNumber(): number {
+  try {
+    const raw = localStorage.getItem(KEYS.billCounter);
+    return raw ? Number.parseInt(raw, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 // ---- Inventory Sizes ----
 export function getInventorySizes(): string[] {
@@ -75,20 +98,17 @@ export function removeInventorySize(size: string) {
 export function renameInventorySize(oldName: string, newName: string) {
   const trimmed = newName.trim();
   if (!trimmed || trimmed === oldName) return;
-  // Rename in sizes list
   const sizes = getInventorySizes();
   const idx = sizes.indexOf(oldName);
   if (idx === -1) return;
   sizes[idx] = trimmed;
   saveInventorySizes(sizes);
-  // Move stock value
   const inv = getLocalInventory();
   if (oldName in inv) {
     inv[trimmed] = inv[oldName];
     delete inv[oldName];
     saveLocalInventory(inv);
   }
-  // Move photo
   const photos = getInventoryPhotos();
   if (oldName in photos) {
     photos[trimmed] = photos[oldName];
@@ -152,12 +172,16 @@ export function saveLowStockThreshold(n: number) {
 // ---- Orders ----
 export function getLocalOrders(): (CustomerOrder & {
   customerPhone?: string;
+  deliveryAddress?: string;
+  billNumber?: number;
 })[] {
   try {
     const raw = localStorage.getItem(KEYS.orders);
     if (raw) {
       const parsed = JSON.parse(raw) as (CustomerOrder & {
         customerPhone?: string;
+        deliveryAddress?: string;
+        billNumber?: number;
       })[];
       return parsed.map((o) => ({
         ...o,
@@ -177,7 +201,11 @@ export function getLocalOrders(): (CustomerOrder & {
 }
 
 export function saveLocalOrders(
-  orders: (CustomerOrder & { customerPhone?: string })[],
+  orders: (CustomerOrder & {
+    customerPhone?: string;
+    deliveryAddress?: string;
+    billNumber?: number;
+  })[],
 ) {
   try {
     localStorage.setItem(
@@ -191,9 +219,13 @@ export function saveLocalOrders(
   }
 }
 
-export function addLocalOrder(order: CustomerOrder, customerPhone?: string) {
+export function addLocalOrder(
+  order: CustomerOrder & { billNumber?: number },
+  customerPhone?: string,
+  deliveryAddress?: string,
+) {
   const orders = getLocalOrders();
-  orders.unshift({ ...order, customerPhone });
+  orders.unshift({ ...order, customerPhone, deliveryAddress });
   saveLocalOrders(orders);
 }
 
@@ -232,13 +264,11 @@ export function getLocalInventory(): Record<string, number> {
     const stored: Record<string, number> = raw
       ? (JSON.parse(raw) as Record<string, number>)
       : {};
-    // Merge with all known sizes so every size exists
     const sizes = getInventorySizes();
     const merged: Record<string, number> = {};
     for (const s of sizes) {
       merged[s] = stored[s] ?? 0;
     }
-    // Keep any extra keys from stored (custom sizes added before)
     for (const k of Object.keys(stored)) {
       if (!(k in merged)) merged[k] = stored[k];
     }

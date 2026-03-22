@@ -5,6 +5,7 @@ export interface FeatureFlags {
   inventory: boolean;
   suppliers: boolean;
   reports: boolean;
+  lowStockAlert: boolean;
 }
 
 const STORAGE_KEY = "dg_feature_flags";
@@ -14,6 +15,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   inventory: true,
   suppliers: true,
   reports: true,
+  lowStockAlert: false,
 };
 
 export function getFeatureFlags(): FeatureFlags {
