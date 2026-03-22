@@ -1,0 +1,444 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CheckCircle2, Clock, CreditCard, Receipt, Truck } from "lucide-react";
+import { motion } from "motion/react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { type CustomerOrder, OrderStatus } from "../backend";
+import {
+  useGetAllOrders,
+  useSettleBalance,
+  useUpdateOrderStatus,
+} from "../hooks/useQueries";
+import ThermalBill from "./ThermalBill";
+
+const STATUS_CONFIG = {
+  [OrderStatus.pending]: {
+    label: "Pending",
+    icon: Clock,
+    className: "bg-[#8B8589]/15 text-[#353935] border-[#8B8589]/30",
+  },
+  [OrderStatus.ready]: {
+    label: "Ready",
+    icon: CheckCircle2,
+    className: "bg-green-50 text-green-700 border-green-200",
+  },
+  [OrderStatus.delivered]: {
+    label: "Delivered",
+    icon: Truck,
+    className: "bg-muted text-muted-foreground border-border",
+  },
+};
+
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const cfg = STATUS_CONFIG[status];
+  const Icon = cfg.icon;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${cfg.className}`}
+    >
+      <Icon className="h-3 w-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
+function OrderCard({
+  order,
+  index,
+  onShowBill,
+}: {
+  order: CustomerOrder & { customerPhone?: string };
+  index: number;
+  onShowBill: (order: CustomerOrder & { customerPhone?: string }) => void;
+}) {
+  const updateStatus = useUpdateOrderStatus();
+  const settleBalance = useSettleBalance();
+
+  const handleSettle = async () => {
+    await settleBalance.mutateAsync({
+      id: order.id,
+      totalAmount: order.totalAmount,
+    });
+    toast.success(`Balance settled for ${order.customerName}`);
+  };
+
+  const handleStatusChange = async (val: string) => {
+    await updateStatus.mutateAsync({
+      id: order.id,
+      status: val as OrderStatus,
+    });
+    toast.success("Status updated");
+  };
+
+  const dateStr = new Date(
+    Number(order.orderDate) / 1_000_000,
+  ).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  const sizeLabel = order.items
+    .map((i) => `${i.size} (${i.thickness}")`)
+    .join(", ");
+
+  return (
+    <div
+      className="bg-card border border-border rounded-xl shadow-card p-4 space-y-3"
+      data-ocid={`khatabook.item.${index}`}
+    >
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-semibold text-foreground text-sm">
+            {order.customerName}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {dateStr} · {sizeLabel}
+          </p>
+          {order.customerPhone && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              📞 {order.customerPhone}
+            </p>
+          )}
+        </div>
+        <StatusBadge status={order.status} />
+      </div>
+
+      {/* Amount row */}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="bg-muted/40 rounded-lg py-2">
+          <p className="text-xs text-muted-foreground">Total</p>
+          <p className="text-sm font-bold text-foreground">
+            ₹{order.totalAmount.toLocaleString("en-IN")}
+          </p>
+        </div>
+        <div className="bg-green-50 rounded-lg py-2">
+          <p className="text-xs text-green-600">Advance</p>
+          <p className="text-sm font-bold text-green-700">
+            ₹{order.advancePaid.toLocaleString("en-IN")}
+          </p>
+        </div>
+        <div
+          className={`rounded-lg py-2 ${order.balanceDue > 0 ? "bg-[#8B8589]/10" : "bg-muted/40"}`}
+        >
+          <p
+            className={`text-xs ${order.balanceDue > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
+          >
+            Balance
+          </p>
+          <p
+            className={`text-sm font-bold ${order.balanceDue > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
+          >
+            ₹{order.balanceDue.toLocaleString("en-IN")}
+          </p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <Select
+          value={order.status}
+          onValueChange={handleStatusChange}
+          disabled={updateStatus.isPending}
+        >
+          <SelectTrigger
+            className="flex-1 h-8 text-xs bg-background border-border"
+            data-ocid="khatabook.select"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={OrderStatus.pending}>Pending</SelectItem>
+            <SelectItem value={OrderStatus.ready}>Ready</SelectItem>
+            <SelectItem value={OrderStatus.delivered}>Delivered</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {order.balanceDue > 0 && (
+          <Button
+            size="sm"
+            onClick={handleSettle}
+            disabled={settleBalance.isPending}
+            className="h-8 text-xs bg-[#436B95] hover:bg-[#355578] text-white px-3"
+            data-ocid="khatabook.confirm_button"
+          >
+            <CreditCard className="h-3 w-3 mr-1" />
+            Settle
+          </Button>
+        )}
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onShowBill(order)}
+          className="h-8 text-xs border-border hover:bg-[#8B8589]/10 text-foreground px-3"
+          data-ocid="khatabook.secondary_button"
+        >
+          <Receipt className="h-3 w-3 mr-1" />
+          Bill
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function Khatabook() {
+  const { data: orders = [], isLoading } = useGetAllOrders();
+  const [thermalOrder, setThermalOrder] = useState<
+    (CustomerOrder & { customerPhone?: string }) | null
+  >(null);
+
+  const totalBalance = orders.reduce((sum, o) => sum + o.balanceDue, 0);
+  const pendingCount = orders.filter(
+    (o) => o.status === OrderStatus.pending,
+  ).length;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-5"
+      data-ocid="khatabook.section"
+    >
+      <div>
+        <h2 className="font-serif text-2xl font-bold text-foreground">
+          Khatabook
+        </h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Customer order ledger
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[#8B8589]/10 border border-border rounded-xl shadow-card p-4">
+          <p className="text-xs text-muted-foreground">Total Balance Due</p>
+          <p className="text-xl font-bold text-[#436B95] font-serif mt-0.5">
+            ₹{totalBalance.toLocaleString("en-IN")}
+          </p>
+        </div>
+        <div className="bg-card border border-border rounded-xl shadow-card p-4">
+          <p className="text-xs text-muted-foreground">Pending Orders</p>
+          <p className="text-xl font-bold text-foreground font-serif mt-0.5">
+            {pendingCount}
+          </p>
+        </div>
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-card border border-border rounded-xl shadow-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-[#8B8589]/10 border-b border-border">
+              <th className="text-left py-3 px-4 font-semibold text-foreground">
+                Customer
+              </th>
+              <th className="text-left py-3 px-4 font-semibold text-foreground">
+                Date
+              </th>
+              <th className="text-left py-3 px-4 font-semibold text-foreground">
+                Items
+              </th>
+              <th className="text-left py-3 px-4 font-semibold text-foreground">
+                Status
+              </th>
+              <th className="text-right py-3 px-4 font-semibold text-foreground">
+                Total
+              </th>
+              <th className="text-right py-3 px-4 font-semibold text-foreground">
+                Advance
+              </th>
+              <th className="text-right py-3 px-4 font-semibold text-foreground">
+                Balance
+              </th>
+              <th className="text-right py-3 px-4 font-semibold text-foreground">
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="text-center py-8 text-muted-foreground"
+                  data-ocid="khatabook.loading_state"
+                >
+                  Loading orders...
+                </td>
+              </tr>
+            ) : orders.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="text-center py-12"
+                  data-ocid="khatabook.empty_state"
+                >
+                  <p className="text-muted-foreground">No orders yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Create your first bill in Smart Billing
+                  </p>
+                </td>
+              </tr>
+            ) : (
+              orders.map((order, i) => (
+                <DesktopOrderRow
+                  key={String(order.id)}
+                  order={order}
+                  index={i + 1}
+                  onShowBill={setThermalOrder}
+                />
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div
+            className="text-center py-8 text-muted-foreground"
+            data-ocid="khatabook.loading_state"
+          >
+            Loading...
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-12" data-ocid="khatabook.empty_state">
+            <p className="text-muted-foreground">No orders yet</p>
+          </div>
+        ) : (
+          orders.map((order, i) => (
+            <OrderCard
+              key={String(order.id)}
+              order={order}
+              index={i + 1}
+              onShowBill={setThermalOrder}
+            />
+          ))
+        )}
+      </div>
+
+      {thermalOrder && (
+        <ThermalBill
+          order={thermalOrder}
+          onClose={() => setThermalOrder(null)}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+function DesktopOrderRow({
+  order,
+  index,
+  onShowBill,
+}: {
+  order: CustomerOrder & { customerPhone?: string };
+  index: number;
+  onShowBill: (order: CustomerOrder & { customerPhone?: string }) => void;
+}) {
+  const updateStatus = useUpdateOrderStatus();
+  const settleBalance = useSettleBalance();
+
+  const dateStr = new Date(
+    Number(order.orderDate) / 1_000_000,
+  ).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+  });
+  const sizeLabel = order.items.map((i) => `${i.size}`).join(", ");
+
+  return (
+    <tr
+      className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
+      data-ocid={`khatabook.row.${index}`}
+    >
+      <td className="py-3 px-4 font-medium text-foreground">
+        <div>{order.customerName}</div>
+        {order.customerPhone && (
+          <div className="text-xs text-muted-foreground">
+            {order.customerPhone}
+          </div>
+        )}
+      </td>
+      <td className="py-3 px-4 text-muted-foreground">{dateStr}</td>
+      <td className="py-3 px-4 text-muted-foreground text-xs">{sizeLabel}</td>
+      <td className="py-3 px-4">
+        <Select
+          value={order.status}
+          onValueChange={async (val) => {
+            await updateStatus.mutateAsync({
+              id: order.id,
+              status: val as OrderStatus,
+            });
+            toast.success("Status updated");
+          }}
+        >
+          <SelectTrigger
+            className="h-7 text-xs w-28 bg-background border-border"
+            data-ocid="khatabook.select"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={OrderStatus.pending}>Pending</SelectItem>
+            <SelectItem value={OrderStatus.ready}>Ready</SelectItem>
+            <SelectItem value={OrderStatus.delivered}>Delivered</SelectItem>
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="py-3 px-4 text-right font-medium">
+        ₹{order.totalAmount.toLocaleString("en-IN")}
+      </td>
+      <td className="py-3 px-4 text-right text-green-600 font-medium">
+        ₹{order.advancePaid.toLocaleString("en-IN")}
+      </td>
+      <td
+        className={`py-3 px-4 text-right font-bold ${order.balanceDue > 0 ? "text-[#436B95]" : "text-muted-foreground"}`}
+      >
+        ₹{order.balanceDue.toLocaleString("en-IN")}
+      </td>
+      <td className="py-3 px-4">
+        <div className="flex justify-end gap-1.5">
+          {order.balanceDue > 0 && (
+            <Button
+              size="sm"
+              onClick={async () => {
+                await settleBalance.mutateAsync({
+                  id: order.id,
+                  totalAmount: order.totalAmount,
+                });
+                toast.success(`Balance settled for ${order.customerName}`);
+              }}
+              className="h-7 text-xs bg-[#436B95] hover:bg-[#355578] text-white px-2"
+              data-ocid="khatabook.confirm_button"
+            >
+              Settle
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onShowBill(order)}
+            className="h-7 text-xs border-border hover:bg-[#8B8589]/10 text-foreground px-2"
+            data-ocid="khatabook.secondary_button"
+          >
+            <Receipt className="h-3 w-3 mr-1" />
+            Bill
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+}

@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/assets/fonts/PlayfairDisplay.woff2") format("woff2");
+  font-weight: 400 800;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+
+    /* Near-white background */
+    --background: 0.98 0 0;
+    /* Onyx #353935 */
+    --foreground: 0.28 0.01 140;
+
+    /* White card */
+    --card: 1 0 0;
+    --card-foreground: 0.28 0.01 140;
+
+    --popover: 1 0 0;
+    --popover-foreground: 0.28 0.01 140;
+
+    /* Queen Blue #436B95 */
+    --primary: 0.47 0.09 250;
+    --primary-foreground: 1 0 0;
+
+    /* Light Queen Blue tint for secondary */
+    --secondary: 0.94 0.02 250;
+    --secondary-foreground: 0.47 0.09 250;
+
+    /* Taupe Gray muted */
+    --muted: 0.95 0.005 330;
+    --muted-foreground: 0.57 0.01 330;
+
+    /* Light taupe accent */
+    --accent: 0.94 0.01 330;
+    --accent-foreground: 0.28 0.01 140;
+
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+
+    /* Light taupe border */
+    --border: 0.88 0.008 330;
+    --input: 0.88 0.008 330;
+    --ring: 0.47 0.09 250;
+
+    --chart-1: 0.47 0.09 250;
+    --chart-2: 0.57 0.01 330;
+    --chart-3: 0.28 0.01 140;
+    --chart-4: 0.65 0.1 145;
+    --chart-5: 0.6 0.08 30;
+
+    /* Sidebar */
+    --sidebar: 1 0 0;
+    --sidebar-foreground: 0.28 0.01 140;
+    --sidebar-primary: 0.47 0.09 250;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.94 0.01 330;
+    --sidebar-accent-foreground: 0.28 0.01 140;
+    --sidebar-border: 0.88 0.008 330;
+    --sidebar-ring: 0.47 0.09 250;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-serif {
+    font-family: "Playfair Display", serif;
+  }
+}
