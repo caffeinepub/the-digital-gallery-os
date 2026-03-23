@@ -18,6 +18,7 @@ type LocalOrder = CustomerOrder & {
   customerPhone?: string;
   deliveryAddress?: string;
   billNumber?: number;
+  trackingToken?: string;
 };
 
 // Always use localStorage as source of truth.
@@ -43,7 +44,9 @@ export function useCreateOrder() {
       customerPhone?: string;
       deliveryAddress?: string;
       billNumber?: number;
+      trackingToken?: string;
     }) => {
+      const trackingToken = data.trackingToken ?? "";
       let id: bigint;
       try {
         id = await actor!.createOrder(
@@ -51,6 +54,7 @@ export function useCreateOrder() {
           data.items,
           data.totalAmount,
           data.advancePaid,
+          trackingToken,
         );
       } catch {
         id = BigInt(Date.now());
@@ -67,6 +71,7 @@ export function useCreateOrder() {
         customerPhone: data.customerPhone,
         deliveryAddress: data.deliveryAddress,
         billNumber: data.billNumber,
+        trackingToken,
       };
       addLocalOrder(newOrder, data.customerPhone, data.deliveryAddress);
       return newOrder;
@@ -82,7 +87,6 @@ export function useDeleteOrder() {
       deleteLocalOrder(id);
     },
     onSuccess: (_data, id) => {
-      // Update cache immediately without refetch
       qc.setQueryData(["orders"], (old: LocalOrder[] | undefined) =>
         old ? old.filter((o) => String(o.id) !== String(id)) : [],
       );
@@ -180,10 +184,21 @@ export function useDecrementStock() {
 }
 
 export function useSetStock() {
+  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ size, value }: { size: string; value: number }) => {
-      setLocalStock(size, value);
+    mutationFn: async ({
+      size,
+      quantity,
+      value,
+    }: { size: string; quantity?: number; value?: number }) => {
+      const qty = quantity ?? value ?? 0;
+      setLocalStock(size, qty);
+      try {
+        await actor?.updateInventorySize(size, BigInt(qty));
+      } catch {
+        /* ok */
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
@@ -196,7 +211,7 @@ export function useAddSupplierNote() {
       try {
         await actor?.addSupplierNote(text);
       } catch {
-        /* ok */
+        /* ok — note already saved to localStorage by caller */
       }
     },
   });

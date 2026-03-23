@@ -16,16 +16,25 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Bell,
+  Briefcase,
   Check,
+  ChevronRight,
+  Copy,
   Download,
   Eye,
   EyeOff,
+  MapPin,
   Pencil,
+  Phone,
   Plus,
   RotateCcw,
   Shield,
+  Store,
+  Tag,
   Trash2,
   Upload,
+  User,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -238,6 +247,19 @@ export default function Settings({ onProfileSaved }: SettingsProps) {
     existingProfile.pickupLocations,
   );
   const [profileLogo, setProfileLogo] = useState(existingProfile.logoBase64);
+  const [ownerName, setOwnerName] = useState(
+    existingProfile.ownerName || "Emon Dutta",
+  );
+  const [profileAddress, setProfileAddress] = useState(
+    existingProfile.businessAddress || "Basugaon 783372",
+  );
+  const [profileCategory, setProfileCategory] = useState(
+    existingProfile.businessCategory || "Best Quality Photo Frames",
+  );
+  const [profileType, setProfileType] = useState(
+    existingProfile.businessType || "Gift And Photo Frame Selling",
+  );
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -307,8 +329,29 @@ export default function Settings({ onProfileSaved }: SettingsProps) {
       gst: profileGst,
       pickupLocations: profilePickup,
       logoBase64: profileLogo,
+      ownerName,
+      businessAddress: profileAddress,
+      businessCategory: profileCategory,
+      businessType: profileType,
     });
     toast.success("Profile saved! Logo updated everywhere.");
+    onProfileSaved?.();
+  };
+
+  const handleSaveRow = (field: string) => {
+    saveBusinessProfile({
+      businessName: profileName,
+      phone: profilePhone,
+      gst: profileGst,
+      pickupLocations: profilePickup,
+      logoBase64: profileLogo,
+      ownerName,
+      businessAddress: profileAddress,
+      businessCategory: profileCategory,
+      businessType: profileType,
+    });
+    setExpandedRow(null);
+    toast.success(`${field} updated!`);
     onProfileSaved?.();
   };
 
@@ -683,13 +726,27 @@ export default function Settings({ onProfileSaved }: SettingsProps) {
         </TabsContent>
 
         {/* PROFILE TAB */}
-        <TabsContent value="profile" className="space-y-4">
-          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <Label className="text-sm font-semibold text-foreground">
-              Business Logo
-            </Label>
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
+        <TabsContent
+          value="profile"
+          className="min-h-full bg-gray-100 -mx-0 px-0 pb-6"
+        >
+          {/* Logo row at top */}
+          <div className="px-4 py-2 text-sm text-gray-500 bg-gray-100 font-medium">
+            Business Logo
+          </div>
+          <div className="bg-white border-b border-gray-100">
+            <button
+              type="button"
+              className="flex items-center gap-3 px-4 py-4 cursor-pointer"
+              onClick={() =>
+                setExpandedRow(expandedRow === "logo" ? null : "logo")
+              }
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                setExpandedRow(expandedRow === "logo" ? null : "logo")
+              }
+            >
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
                 {profileLogo ? (
                   <img
                     src={profileLogo}
@@ -697,15 +754,19 @@ export default function Settings({ onProfileSaved }: SettingsProps) {
                     className="w-full h-full object-contain"
                   />
                 ) : (
-                  <div className="flex flex-col items-center gap-1">
-                    <Upload className="h-6 w-6 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">
-                      No logo
-                    </span>
-                  </div>
+                  <span className="text-[#436B95] font-bold text-lg">DG</span>
                 )}
               </div>
-              <div className="space-y-2">
+              <div className="flex-1">
+                <div className="text-xs text-gray-400">Business Logo</div>
+                <div className="font-semibold text-sm text-gray-800">
+                  {profileLogo ? "Logo uploaded" : "No logo set"}
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-[#436B95]" />
+            </button>
+            {expandedRow === "logo" && (
+              <div className="px-4 pb-4 space-y-2 border-t border-gray-50">
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -713,99 +774,428 @@ export default function Settings({ onProfileSaved }: SettingsProps) {
                   className="hidden"
                   onChange={handleLogoUpload}
                 />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => logoInputRef.current?.click()}
-                  className="h-8 text-xs gap-1.5"
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  {profileLogo ? "Change Logo" : "Upload Logo"}
-                </Button>
-                {profileLogo && (
+                <div className="flex gap-2 pt-3">
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => setProfileLogo("")}
-                    className="h-8 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                    variant="outline"
+                    onClick={() => logoInputRef.current?.click()}
+                    className="h-8 text-xs gap-1.5"
+                    data-ocid="profile.upload_button"
                   >
-                    Remove
+                    <Upload className="h-3.5 w-3.5" />
+                    {profileLogo ? "Change Logo" : "Upload Logo"}
                   </Button>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Shows in app header & on all bills
+                  {profileLogo && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setProfileLogo("");
+                        handleSaveRow("Logo");
+                      }}
+                      className="h-8 text-xs text-red-500 hover:text-red-600"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                  {profileLogo && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleSaveRow("Logo")}
+                      className="h-8 text-xs bg-[#436B95] hover:bg-[#355578] text-white ml-auto"
+                      data-ocid="profile.save_button"
+                    >
+                      Save
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400">
+                  Shows in app header &amp; on all bills
                 </p>
               </div>
-            </div>
+            )}
           </div>
-          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <Label className="text-sm font-semibold text-foreground">
-              Business Details
-            </Label>
-            <div className="space-y-3">
-              {[
-                {
-                  label: "Business Name",
-                  value: profileName,
-                  onChange: setProfileName,
-                  placeholder: "The Digital Gallery by Emon",
-                },
-                {
-                  label: "Phone Number",
-                  value: profilePhone,
-                  onChange: setProfilePhone,
-                  placeholder: "+91 XXXXX XXXXX",
-                },
-                {
-                  label: "GST / Trade License (optional)",
-                  value: profileGst,
-                  onChange: setProfileGst,
-                  placeholder: "GSTIN or License No.",
-                },
-              ].map(({ label, value, onChange, placeholder }) => (
-                <div key={label}>
-                  <Label className="text-xs text-muted-foreground mb-1 block">
-                    {label}
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      value={value}
-                      onChange={(e) => onChange(e.target.value)}
-                      placeholder={placeholder}
-                      className="h-9 text-sm pr-8"
-                    />
-                    {value && (
-                      <button
-                        type="button"
-                        onClick={() => onChange("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+
+          {/* Personal Info section */}
+          <div className="px-4 py-2 text-sm text-gray-500 bg-gray-100 font-medium mt-2">
+            Personal Info
+          </div>
+          <div className="bg-white divide-y divide-gray-100">
+            {/* Name row */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer w-full text-left"
+                onClick={() =>
+                  setExpandedRow(
+                    expandedRow === "ownerName" ? null : "ownerName",
+                  )
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(
+                    expandedRow === "ownerName" ? null : "ownerName",
+                  )
+                }
+              >
+                <User className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">Name</div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {ownerName || "—"}
                   </div>
                 </div>
-              ))}
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">
-                  Deliverable Locations
-                </Label>
-                <Textarea
-                  value={profilePickup}
-                  onChange={(e) => setProfilePickup(e.target.value)}
-                  placeholder="Basugaon, Kokrajhar, Bongaigaon, Barpeta Road"
-                  className="text-sm resize-none"
-                  rows={2}
-                />
-              </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "ownerName" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    placeholder="Your name"
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Name")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            {/* Phone row */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
+                onClick={() =>
+                  setExpandedRow(expandedRow === "phone" ? null : "phone")
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(expandedRow === "phone" ? null : "phone")
+                }
+              >
+                <Phone className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">Registered number</div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {profilePhone || "—"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "phone" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={profilePhone}
+                    onChange={(e) => setProfilePhone(e.target.value)}
+                    placeholder="+91 XXXXX XXXXX"
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Phone")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
-          <Button
-            onClick={handleSaveProfile}
-            className="w-full h-10 bg-[#436B95] hover:bg-[#355578] text-white font-semibold"
-          >
-            Save Profile
-          </Button>
+
+          {/* Business Info section */}
+          <div className="px-4 py-2 text-sm text-gray-500 bg-gray-100 font-medium mt-2">
+            Business info
+          </div>
+          <div className="bg-white divide-y divide-gray-100">
+            {/* Business name */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
+                onClick={() =>
+                  setExpandedRow(expandedRow === "bizName" ? null : "bizName")
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(expandedRow === "bizName" ? null : "bizName")
+                }
+              >
+                <Store className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">Business name</div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {profileName || "—"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "bizName" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="The Digital Gallery by Emon"
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Business name")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            {/* Business address */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
+                onClick={() =>
+                  setExpandedRow(expandedRow === "address" ? null : "address")
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(expandedRow === "address" ? null : "address")
+                }
+              >
+                <MapPin className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">Business address</div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {profileAddress || "—"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "address" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={profileAddress}
+                    onChange={(e) => setProfileAddress(e.target.value)}
+                    placeholder="Basugaon 783372"
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Address")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            {/* Business category */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
+                onClick={() =>
+                  setExpandedRow(expandedRow === "category" ? null : "category")
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(expandedRow === "category" ? null : "category")
+                }
+              >
+                <Copy className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">Business Category</div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {profileCategory || "—"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "category" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={profileCategory}
+                    onChange={(e) => setProfileCategory(e.target.value)}
+                    placeholder="Best Quality Photo Frames"
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Category")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            {/* Business type */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
+                onClick={() =>
+                  setExpandedRow(expandedRow === "bizType" ? null : "bizType")
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(expandedRow === "bizType" ? null : "bizType")
+                }
+              >
+                <Tag className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">Business Type</div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {profileType || "—"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "bizType" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={profileType}
+                    onChange={(e) => setProfileType(e.target.value)}
+                    placeholder="Gift And Photo Frame Selling"
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Business Type")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* More Settings section */}
+          <div className="px-4 py-2 text-sm text-gray-500 bg-gray-100 font-medium mt-2">
+            More Settings
+          </div>
+          <div className="bg-white divide-y divide-gray-100">
+            {/* GST */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
+                onClick={() =>
+                  setExpandedRow(expandedRow === "gst" ? null : "gst")
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(expandedRow === "gst" ? null : "gst")
+                }
+              >
+                <Briefcase className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">
+                    GST / Trade License
+                  </div>
+                  <div className="font-semibold text-sm text-gray-800">
+                    {profileGst || "Not set"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "gst" && (
+                <div className="px-4 pb-3 pt-1 flex gap-2 border-t border-gray-50">
+                  <Input
+                    value={profileGst}
+                    onChange={(e) => setProfileGst(e.target.value)}
+                    placeholder="GSTIN or License No."
+                    className="h-9 text-sm flex-1"
+                    data-ocid="profile.input"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("GST")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            {/* Deliverable Locations */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer w-full text-left"
+                onClick={() =>
+                  setExpandedRow(
+                    expandedRow === "locations" ? null : "locations",
+                  )
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setExpandedRow(
+                    expandedRow === "locations" ? null : "locations",
+                  )
+                }
+              >
+                <MapPin className="h-5 w-5 text-gray-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-400">
+                    Deliverable Locations
+                  </div>
+                  <div className="font-semibold text-sm text-gray-800 truncate">
+                    {profilePickup || "—"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[#436B95]" />
+              </button>
+              {expandedRow === "locations" && (
+                <div className="px-4 pb-3 pt-1 space-y-2 border-t border-gray-50">
+                  <Textarea
+                    value={profilePickup}
+                    onChange={(e) => setProfilePickup(e.target.value)}
+                    placeholder="Basugaon, Kokrajhar, Bongaigaon, Barpeta Road"
+                    className="text-sm resize-none"
+                    rows={2}
+                    data-ocid="profile.textarea"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveRow("Locations")}
+                    className="h-9 bg-[#436B95] hover:bg-[#355578] text-white w-full"
+                    data-ocid="profile.save_button"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Save All button */}
+          <div className="px-4 mt-4">
+            <Button
+              onClick={handleSaveProfile}
+              className="w-full h-10 bg-[#353935] hover:bg-[#1e211e] text-white font-semibold"
+              data-ocid="profile.submit_button"
+            >
+              Save All Changes
+            </Button>
+          </div>
         </TabsContent>
 
         {/* VISIBILITY TAB */}
@@ -881,6 +1271,29 @@ export default function Settings({ onProfileSaved }: SettingsProps) {
                 }}
               />
             </div>
+          </div>
+
+          {/* Alert Button */}
+          <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100">
+            <div>
+              <div className="font-bold text-sm text-[#353935]">
+                Alert Button
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                Show "Order Confirmed" button in bills
+              </div>
+            </div>
+            <Switch
+              checked={flags.alertEnabled ?? false}
+              onCheckedChange={(v) => {
+                updateFlag("alertEnabled", v);
+                toast.success(
+                  v ? "Alert button enabled" : "Alert button disabled",
+                );
+              }}
+              className="data-[state=checked]:bg-[#436B95]"
+              data-ocid="visibility.alert_toggle"
+            />
           </div>
         </TabsContent>
 

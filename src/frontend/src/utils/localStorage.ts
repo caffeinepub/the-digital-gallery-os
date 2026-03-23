@@ -464,6 +464,10 @@ export interface BusinessProfile {
   gst: string;
   pickupLocations: string;
   logoBase64: string;
+  ownerName: string;
+  businessAddress: string;
+  businessCategory: string;
+  businessType: string;
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -472,6 +476,10 @@ const DEFAULT_PROFILE: BusinessProfile = {
   gst: "",
   pickupLocations: "Basugaon, Kokrajhar, Bongaigaon, Barpeta Road",
   logoBase64: "",
+  ownerName: "Emon Dutta",
+  businessAddress: "Basugaon 783372",
+  businessCategory: "Best Quality Photo Frames",
+  businessType: "Gift And Photo Frame Selling",
 };
 
 export function getBusinessProfile(): BusinessProfile {

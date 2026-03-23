@@ -15,6 +15,7 @@ export interface CustomerOrder {
   'customerName' : string,
   'status' : OrderStatus,
   'orderDate' : Time,
+  'trackingToken' : string,
   'totalAmount' : number,
   'advancePaid' : number,
   'balanceDue' : number,
@@ -34,14 +35,16 @@ export type Time = bigint;
 export interface _SERVICE {
   'addSupplierNote' : ActorMethod<[string], undefined>,
   'createOrder' : ActorMethod<
-    [string, Array<FramingItem>, number, number],
+    [string, Array<FramingItem>, number, number, string],
     bigint
   >,
   'decrementStock' : ActorMethod<[string, bigint], undefined>,
+  'deleteOrder' : ActorMethod<[bigint], undefined>,
   'getAllInventory' : ActorMethod<[], Array<[string, bigint]>>,
   'getAllOrders' : ActorMethod<[], Array<CustomerOrder>>,
   'getAllSupplierNotes' : ActorMethod<[], Array<SupplierNote>>,
   'getOrder' : ActorMethod<[bigint], CustomerOrder>,
+  'getOrderByToken' : ActorMethod<[string], [] | [CustomerOrder]>,
   'getStockCount' : ActorMethod<[string], bigint>,
   'incrementStock' : ActorMethod<[string, bigint], undefined>,
   'settleBalance' : ActorMethod<[bigint, number], undefined>,

@@ -25,6 +25,7 @@ export const CustomerOrder = IDL.Record({
   'customerName' : IDL.Text,
   'status' : OrderStatus,
   'orderDate' : Time,
+  'trackingToken' : IDL.Text,
   'totalAmount' : IDL.Float64,
   'advancePaid' : IDL.Float64,
   'balanceDue' : IDL.Float64,
@@ -38,11 +39,12 @@ export const SupplierNote = IDL.Record({
 export const idlService = IDL.Service({
   'addSupplierNote' : IDL.Func([IDL.Text], [], []),
   'createOrder' : IDL.Func(
-      [IDL.Text, IDL.Vec(FramingItem), IDL.Float64, IDL.Float64],
+      [IDL.Text, IDL.Vec(FramingItem), IDL.Float64, IDL.Float64, IDL.Text],
       [IDL.Nat],
       [],
     ),
   'decrementStock' : IDL.Func([IDL.Text, IDL.Nat], [], []),
+  'deleteOrder' : IDL.Func([IDL.Nat], [], []),
   'getAllInventory' : IDL.Func(
       [],
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
@@ -51,6 +53,7 @@ export const idlService = IDL.Service({
   'getAllOrders' : IDL.Func([], [IDL.Vec(CustomerOrder)], ['query']),
   'getAllSupplierNotes' : IDL.Func([], [IDL.Vec(SupplierNote)], ['query']),
   'getOrder' : IDL.Func([IDL.Nat], [CustomerOrder], ['query']),
+  'getOrderByToken' : IDL.Func([IDL.Text], [IDL.Opt(CustomerOrder)], ['query']),
   'getStockCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
   'incrementStock' : IDL.Func([IDL.Text, IDL.Nat], [], []),
   'settleBalance' : IDL.Func([IDL.Nat, IDL.Float64], [], []),
@@ -78,6 +81,7 @@ export const idlFactory = ({ IDL }) => {
     'customerName' : IDL.Text,
     'status' : OrderStatus,
     'orderDate' : Time,
+    'trackingToken' : IDL.Text,
     'totalAmount' : IDL.Float64,
     'advancePaid' : IDL.Float64,
     'balanceDue' : IDL.Float64,
@@ -88,11 +92,12 @@ export const idlFactory = ({ IDL }) => {
   return IDL.Service({
     'addSupplierNote' : IDL.Func([IDL.Text], [], []),
     'createOrder' : IDL.Func(
-        [IDL.Text, IDL.Vec(FramingItem), IDL.Float64, IDL.Float64],
+        [IDL.Text, IDL.Vec(FramingItem), IDL.Float64, IDL.Float64, IDL.Text],
         [IDL.Nat],
         [],
       ),
     'decrementStock' : IDL.Func([IDL.Text, IDL.Nat], [], []),
+    'deleteOrder' : IDL.Func([IDL.Nat], [], []),
     'getAllInventory' : IDL.Func(
         [],
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
@@ -101,6 +106,11 @@ export const idlFactory = ({ IDL }) => {
     'getAllOrders' : IDL.Func([], [IDL.Vec(CustomerOrder)], ['query']),
     'getAllSupplierNotes' : IDL.Func([], [IDL.Vec(SupplierNote)], ['query']),
     'getOrder' : IDL.Func([IDL.Nat], [CustomerOrder], ['query']),
+    'getOrderByToken' : IDL.Func(
+        [IDL.Text],
+        [IDL.Opt(CustomerOrder)],
+        ['query'],
+      ),
     'getStockCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
     'incrementStock' : IDL.Func([IDL.Text, IDL.Nat], [], []),
     'settleBalance' : IDL.Func([IDL.Nat, IDL.Float64], [], []),

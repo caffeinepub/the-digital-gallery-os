@@ -7,6 +7,9 @@ import Map "mo:core/Map";
 import Iter "mo:core/Iter";
 import List "mo:core/List";
 import Runtime "mo:core/Runtime";
+import Nat "mo:core/Nat";
+
+
 
 actor {
   // Types
@@ -32,6 +35,7 @@ actor {
     advancePaid : Float;
     balanceDue : Float;
     status : OrderStatus;
+    trackingToken : Text;
   };
 
   module CustomerOrder {
@@ -53,7 +57,7 @@ actor {
   let supplierNotes = List.empty<SupplierNote>();
 
   // Order Management
-  public func createOrder(customerName : Text, items : [FramingItem], totalAmount : Float, advancePaid : Float) : async Nat {
+  public func createOrder(customerName : Text, items : [FramingItem], totalAmount : Float, advancePaid : Float, trackingToken : Text) : async Nat {
     let id = nextOrderId;
     let newOrder : CustomerOrder = {
       id;
@@ -64,6 +68,7 @@ actor {
       advancePaid;
       balanceDue = totalAmount - advancePaid;
       status = #pending;
+      trackingToken;
     };
 
     orders.add(id, newOrder);
@@ -96,6 +101,19 @@ actor {
     if (order.balanceDue == 0.0) { Runtime.trap("Order already fully paid") };
     let newBalance = order.balanceDue - amountPaid;
     orders.add(id, { order with advancePaid = order.advancePaid + amountPaid; balanceDue = if (newBalance < 0.0) { 0.0 } else { newBalance } });
+  };
+
+  // Added on 2024-07-06
+  public func deleteOrder(id : Nat) : async () {
+    if (orders.get(id) == null) {
+      Runtime.trap("Order not found for deletion");
+    };
+    orders.remove(id);
+  };
+
+  // Added on 2024-07-06
+  public query ({ caller }) func getOrderByToken(token : Text) : async ?CustomerOrder {
+    orders.values().find(func(order) { order.trackingToken == token });
   };
 
   // Inventory Management

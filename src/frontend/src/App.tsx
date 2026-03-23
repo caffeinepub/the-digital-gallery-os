@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import Inventory from "./components/Inventory";
 import Khatabook from "./components/Khatabook";
 import LockScreen from "./components/LockScreen";
+import OrderTracker from "./components/OrderTracker";
 import Reports from "./components/Reports";
 import Settings from "./components/Settings";
 import SmartBilling from "./components/SmartBilling";
@@ -83,7 +84,6 @@ function LogoMark({ src, size = 9 }: { src: string; size?: number }) {
       />
     );
   }
-  // Fallback initials badge
   return (
     <div
       className={`w-${size} h-${size} rounded-lg bg-[#436B95] flex items-center justify-center shrink-0`}
@@ -94,9 +94,19 @@ function LogoMark({ src, size = 9 }: { src: string; size?: number }) {
 }
 
 export default function App() {
+  // Hash-based routing for public order tracking (bypass PIN)
+  const hash = window.location.hash;
+  if (hash.startsWith("#/track/")) {
+    const token = hash.replace("#/track/", "");
+    return <OrderTracker token={token} />;
+  }
+
+  return <AppShell />;
+}
+
+function AppShell() {
   const [activeModule, setActiveModule] = useState<Module>("billing");
   const [logoSrc, setLogoSrc] = useState("");
-  // businessName managed via profile
   const [featureFlags, setFeatureFlags] = useState(getFeatureFlags);
   const [appPin, setAppPin] = useState(() => getAppPin());
   const [unlocked, setUnlocked] = useState(() => {

@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, MessageCircle, Printer, Share2, X } from "lucide-react";
+import { CheckCircle2, Printer, Share2, X } from "lucide-react";
 import ReactDOM from "react-dom";
 import { toast } from "sonner";
+import { getFeatureFlags } from "../hooks/useFeatureFlags";
 import { getBusinessProfile } from "../utils/localStorage";
 
 interface ThermalBillOrder {
@@ -13,6 +14,7 @@ interface ThermalBillOrder {
   advancePaid: number;
   balanceDue: number;
   orderDate: bigint;
+  trackingToken?: string;
   items: Array<{
     size: string;
     thickness: number;
@@ -28,7 +30,6 @@ interface ThermalBillProps {
   onClose: () => void;
 }
 
-// Draws the bill on a canvas and returns a Blob — no external library needed
 async function generateBillCanvas(
   order: ThermalBillOrder,
   billNo: string,
@@ -42,13 +43,13 @@ async function generateBillCanvas(
   const lineH = 20;
   const pad = 24;
 
-  // Calculate total height needed
   const headerH = logoSrc ? 140 : 90;
   const infoH = 80 + (order.deliveryAddress ? 30 : 0);
   const itemsH = order.items.length * 28 + 40;
   const totalsH = discount > 0 ? 120 : 80;
   const footerH = 80;
-  const H = headerH + infoH + itemsH + totalsH + footerH + 40;
+  const tcH = 60;
+  const H = headerH + infoH + itemsH + totalsH + footerH + tcH + 40;
 
   const canvas = document.createElement("canvas");
   const dpr = 2;
@@ -58,13 +59,11 @@ async function generateBillCanvas(
   if (!ctx) return null;
   ctx.scale(dpr, dpr);
 
-  // Background
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, W, H);
 
   let y = pad;
 
-  // Draw logo if available
   if (logoSrc) {
     await new Promise<void>((resolve) => {
       const img = new Image();
@@ -79,7 +78,6 @@ async function generateBillCanvas(
     y += 64;
   }
 
-  // Business name
   ctx.fillStyle = "#000000";
   ctx.font = "bold 15px monospace";
   ctx.textAlign = "center";
@@ -95,7 +93,6 @@ async function generateBillCanvas(
   ctx.fillText(profile.phone || "+91 93652 46096", W / 2, y);
   y += lineH + 4;
 
-  // Dashed separator
   const dashes = (n: number) => Array(n).fill("-").join("");
   ctx.fillStyle = "#000000";
   ctx.font = "11px monospace";
@@ -103,7 +100,6 @@ async function generateBillCanvas(
   ctx.fillText(dashes(44), W / 2, y);
   y += lineH;
 
-  // Bill info
   ctx.textAlign = "left";
   ctx.fillStyle = "#000000";
   ctx.font = "11px monospace";
@@ -125,12 +121,10 @@ async function generateBillCanvas(
   }
   y += 4;
 
-  // Dashed separator
   ctx.textAlign = "center";
   ctx.fillText(dashes(44), W / 2, y);
   y += lineH;
 
-  // Items header
   ctx.font = "bold 11px monospace";
   ctx.textAlign = "left";
   ctx.fillText("ITEM", pad, y);
@@ -144,7 +138,6 @@ async function generateBillCanvas(
   ctx.fillText(dashes(44), W / 2, y);
   y += lineH;
 
-  // Items
   for (const item of order.items) {
     ctx.font = "11px monospace";
     ctx.textAlign = "left";
@@ -156,12 +149,10 @@ async function generateBillCanvas(
     y += lineH + 4;
   }
 
-  // Dashed separator
   ctx.textAlign = "center";
   ctx.fillText(dashes(44), W / 2, y);
   y += lineH;
 
-  // Totals
   if (discount > 0) {
     const subtotal = netAmount + discount;
     ctx.textAlign = "left";
@@ -194,12 +185,10 @@ async function generateBillCanvas(
   );
   y += lineH;
 
-  // Bold separator
   ctx.fillStyle = "#000000";
   ctx.fillRect(pad, y, W - pad * 2, 2);
   y += 10;
 
-  // Balance due
   ctx.font = "bold 15px monospace";
   ctx.textAlign = "left";
   ctx.fillText("BALANCE DUE:", pad, y);
@@ -210,7 +199,6 @@ async function generateBillCanvas(
   ctx.fillRect(pad, y, W - pad * 2, 2);
   y += 12;
 
-  // Footer
   ctx.font = "10px monospace";
   ctx.fillStyle = "#555555";
   ctx.textAlign = "center";
@@ -228,13 +216,31 @@ async function generateBillCanvas(
 
   ctx.fillText(dashes(44), W / 2, y);
   y += lineH - 2;
-
   ctx.fillText("Thank you for your business!", W / 2, y);
   y += lineH - 2;
 
   ctx.font = "bold 10px monospace";
   ctx.fillStyle = "#000000";
   ctx.fillText(profile.businessName || "The Digital Gallery by Emon", W / 2, y);
+  y += lineH;
+
+  ctx.fillStyle = "#000000";
+  ctx.font = "9px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(dashes(44), W / 2, y);
+  y += lineH - 4;
+  ctx.fillStyle = "#777777";
+  ctx.fillText(
+    "T&C: IF THE CUSTOMER IS UNABLE TO RECEIVE THE ORDER,",
+    W / 2,
+    y,
+  );
+  y += lineH - 4;
+  ctx.fillText(
+    "HE/SHE HAVE TO PAY THE MAKING COST DEPENDING ON THE ORDER",
+    W / 2,
+    y,
+  );
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
@@ -248,6 +254,7 @@ export default function ThermalBill({
   onClose,
 }: ThermalBillProps) {
   const profile = getBusinessProfile();
+  const flags = getFeatureFlags();
   const billNo = billNumber
     ? String(billNumber).padStart(4, "0")
     : String(order.id).slice(-4).padStart(4, "0");
@@ -261,10 +268,12 @@ export default function ThermalBill({
 
   const netAmount = order.totalAmount;
   const subtotal = netAmount + discount;
-
   const logoSrc = profile.logoBase64 || "";
 
-  // Share bill as image using native Canvas API (no html2canvas needed)
+  const trackingUrl = order.trackingToken
+    ? `${window.location.origin}/#/track/${order.trackingToken}`
+    : null;
+
   const handleShareAsImage = async () => {
     const toastId = toast.loading("Generating bill image...");
     try {
@@ -277,7 +286,6 @@ export default function ThermalBill({
         logoSrc,
         profile,
       );
-
       toast.dismiss(toastId);
 
       if (!blob) {
@@ -289,7 +297,6 @@ export default function ThermalBill({
         type: "image/jpeg",
       });
 
-      // Try Web Share API (works on mobile)
       if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({
@@ -298,12 +305,10 @@ export default function ThermalBill({
           });
           return;
         } catch (e: unknown) {
-          // If user cancelled (AbortError), don't fall through to download
           if (e instanceof Error && e.name === "AbortError") return;
         }
       }
 
-      // Fallback: download the image
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -321,7 +326,6 @@ export default function ThermalBill({
 
   const handlePrint = () => window.print();
 
-  // Order confirmation template message
   const handleSendConfirmation = () => {
     const phone = (order.customerPhone || "").replace(/\D/g, "");
     if (!phone) {
@@ -329,7 +333,10 @@ export default function ThermalBill({
       return;
     }
     const itemLabel = order.items[0]?.size ?? "your order";
-    const msg = `Order Confirmed! ✅\nHi ${order.customerName}, your order for ${itemLabel} is confirmed with The Digital Gallery by Emon.\n\nTotal: ₹${netAmount.toLocaleString("en-IN")}\nAdvance: ₹${order.advancePaid.toLocaleString("en-IN")}\nBalance: ₹${order.balanceDue.toLocaleString("en-IN")}\n\n📍 Pickup Info: We provide pickup points in Basugaon, Kokrajhar, Bongaigaon, and Barpeta Road. I will message you to coordinate the exact meeting spot once your order is ready!\n\nThanks,\nEmon\nThe Digital Gallery\n📞 +91 9365246096`;
+    const trackingLine = trackingUrl
+      ? `\n🔗 Track your order: ${trackingUrl}`
+      : "";
+    const msg = `Order Confirmed! ✅\nHi ${order.customerName}, your order for ${itemLabel} is confirmed with The Digital Gallery by Emon.\n\nTotal: ₹${netAmount.toLocaleString("en-IN")}\nAdvance: ₹${order.advancePaid.toLocaleString("en-IN")}\nBalance: ₹${order.balanceDue.toLocaleString("en-IN")}\n\n📍 Deliverable Locations: Basugaon, Kokrajhar, Bongaigaon, and Barpeta Road. I will message you to coordinate the exact meeting spot once your order is ready!${trackingLine}\n\nThanks,\nEmon\nThe Digital Gallery\n📞 +91 9365246096`;
     window.open(
       `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,
       "_blank",
@@ -348,7 +355,6 @@ export default function ThermalBill({
       style={{ background: "rgba(0,0,0,0.75)" }}
       data-ocid="thermal.modal"
     >
-      {/* Backdrop */}
       <div
         className="absolute inset-0"
         onClick={onClose}
@@ -370,13 +376,11 @@ export default function ThermalBill({
           <X className="h-6 w-6" />
         </button>
 
-        {/* Bill preview */}
         <div
           id="thermal-bill-capture"
           className="bg-white rounded border border-gray-200 font-mono text-black text-xs overflow-hidden"
           style={{ maxWidth: "320px", margin: "0 auto" }}
         >
-          {/* Header */}
           <div className="text-center px-4 pt-5 pb-3">
             {logoSrc ? (
               <img
@@ -417,30 +421,32 @@ export default function ThermalBill({
               <div className="text-gray-500">Phone: {order.customerPhone}</div>
             )}
             {order.deliveryAddress && (
-              <div className="text-gray-500 leading-snug">
-                Deliver to:{" "}
-                <span className="text-black">{order.deliveryAddress}</span>
+              <div className="text-gray-500">
+                Deliver to: {order.deliveryAddress}
               </div>
             )}
           </div>
 
           <div className="border-t border-dashed border-gray-400 mx-3" />
 
-          <div className="px-4 py-2">
-            <div className="flex justify-between font-bold text-xs uppercase mb-1">
-              <span className="flex-1">Item</span>
-              <span className="w-8 text-center">Qty</span>
-              <span className="w-20 text-right">Price</span>
+          <div className="px-4 pt-2 pb-1">
+            <div className="flex font-bold">
+              <span className="flex-1">ITEM</span>
+              <span className="w-8 text-center">QTY</span>
+              <span className="w-16 text-right">PRICE</span>
             </div>
-            <div className="border-t border-dashed border-gray-300 mb-2" />
-            {order.items.map((item) => (
-              <div
-                key={`${item.size}-${String(item.quantity)}`}
-                className="flex justify-between mb-1.5"
-              >
-                <span className="flex-1 pr-2 leading-tight">{item.size}</span>
+            <div className="border-t border-dashed border-gray-300 my-1" />
+            {order.items.map((item, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: thermal bill rows stable
+              <div key={i} className="flex items-baseline py-0.5">
+                <span className="flex-1 leading-tight">
+                  {item.size}
+                  {item.thickness > 0 && (
+                    <span className="text-gray-400"> ({item.thickness}mm)</span>
+                  )}
+                </span>
                 <span className="w-8 text-center">{String(item.quantity)}</span>
-                <span className="w-20 text-right">
+                <span className="w-16 text-right">
                   ₹{item.unitPrice.toLocaleString("en-IN")}
                 </span>
               </div>
@@ -449,37 +455,35 @@ export default function ThermalBill({
 
           <div className="border-t border-dashed border-gray-400 mx-3" />
 
-          <div className="px-4 py-2 space-y-0.5">
+          <div className="px-4 py-1.5 space-y-0.5">
             {discount > 0 && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Subtotal:</span>
+                  <span>Subtotal</span>
                   <span>₹{subtotal.toLocaleString("en-IN")}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Discount:</span>
+                <div className="flex justify-between text-green-700">
+                  <span>Discount</span>
                   <span>-₹{discount.toLocaleString("en-IN")}</span>
                 </div>
               </>
             )}
             <div className="flex justify-between">
-              <span className="text-gray-500">Net Amount:</span>
-              <span className="font-semibold">
+              <span>Net Amount</span>
+              <span className="font-bold">
                 ₹{netAmount.toLocaleString("en-IN")}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Advance Paid:</span>
+            <div className="flex justify-between text-gray-500">
+              <span>Advance Paid</span>
               <span>-₹{order.advancePaid.toLocaleString("en-IN")}</span>
             </div>
           </div>
 
           <div className="border-t-2 border-black mx-3" />
-          <div className="px-4 py-2">
-            <div className="flex justify-between font-bold text-sm">
-              <span>BALANCE DUE:</span>
-              <span>₹{order.balanceDue.toLocaleString("en-IN")}</span>
-            </div>
+          <div className="px-4 py-2 flex justify-between font-bold text-sm">
+            <span>BALANCE DUE</span>
+            <span>₹{order.balanceDue.toLocaleString("en-IN")}</span>
           </div>
           <div className="border-t-2 border-black mx-3" />
 
@@ -492,62 +496,57 @@ export default function ThermalBill({
               {profile.businessName || "The Digital Gallery by Emon"}
             </div>
           </div>
+
+          <div className="border-t border-dashed border-gray-300 mx-3" />
+          <div className="text-[9px] text-gray-400 text-center px-4 pb-3 pt-1.5 leading-tight">
+            T&amp;C: IF THE CUSTOMER IS UNABLE TO RECEIVE THE ORDER, HE/SHE HAVE
+            TO PAY THE MAKING COST DEPENDING ON THE ORDER
+          </div>
         </div>
 
-        {/* Action buttons */}
         <div className="grid grid-cols-2 gap-2 mt-3">
           <Button
             onClick={handlePrint}
             className="bg-[#353935] hover:bg-[#1e211e] text-white font-medium h-10 rounded-lg text-xs"
             data-ocid="thermal.print_button"
           >
-            <Printer className="mr-1.5 h-3.5 w-3.5" />
-            Print Bill
+            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print Bill
           </Button>
           <Button
             onClick={handleShareAsImage}
             className="bg-[#436B95] hover:bg-[#355578] text-white font-medium h-10 rounded-lg text-xs"
             data-ocid="thermal.share_button"
           >
-            <Share2 className="mr-1.5 h-3.5 w-3.5" />
-            Share Image
+            <Share2 className="mr-1.5 h-3.5 w-3.5" /> Share Image
           </Button>
-          {order.customerPhone && (
-            <>
-              <Button
-                onClick={handleSendConfirmation}
-                className="text-white font-medium h-10 rounded-lg text-xs"
-                style={{ background: "#25D366" }}
-                data-ocid="thermal.confirm_button"
-              >
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Order Confirmed
-              </Button>
-              <Button
-                onClick={() => {
-                  const phone = (order.customerPhone || "").replace(/\D/g, "");
-                  const msg = `Hi ${order.customerName}, your bill #${billNo} is ready. Total: ₹${netAmount.toLocaleString("en-IN")}, Balance: ₹${order.balanceDue.toLocaleString("en-IN")}. - The Digital Gallery, Emon. 📞 +91 93652 46096`;
-                  window.open(
-                    `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,
-                    "_blank",
-                  );
-                }}
-                variant="outline"
-                className="h-10 rounded-lg text-xs border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
-                data-ocid="thermal.whatsapp_button"
-              >
-                <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-                WhatsApp
-              </Button>
-            </>
+          {order.customerPhone && flags.alertEnabled && (
+            <Button
+              onClick={handleSendConfirmation}
+              className="col-span-2 text-white font-medium h-10 rounded-lg text-xs"
+              style={{ background: "#25D366" }}
+              data-ocid="thermal.confirm_button"
+            >
+              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Order Confirmed
+            </Button>
           )}
         </div>
 
-        {/* Print styles */}
         <style>{`
           @media print {
-            body > * { display: none !important; }
-            #thermal-bill-capture { display: block !important; position: fixed; top: 0; left: 0; width: 80mm; background: white; }
+            body > *:not([data-print-target]) { display: none !important; }
+            #thermal-bill-capture {
+              display: block !important;
+              position: fixed !important;
+              top: 0; left: 0;
+              width: 80mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+              font-size: 11px !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @page { size: 80mm auto; margin: 0; }
           }
         `}</style>
       </div>

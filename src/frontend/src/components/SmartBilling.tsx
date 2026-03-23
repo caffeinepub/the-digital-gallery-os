@@ -29,6 +29,7 @@ interface ThermalOrder {
   advancePaid: number;
   balanceDue: number;
   orderDate: bigint;
+  trackingToken?: string;
   items: Array<{
     size: string;
     thickness: number;
@@ -42,7 +43,7 @@ interface BillLineItem {
   thickness: string;
   productId: string;
   quantity: number;
-  customPrice: string; // override price, empty = use product price
+  customPrice: string;
 }
 
 const emptyItem = (): BillLineItem => ({
@@ -58,21 +59,17 @@ export default function SmartBilling() {
   const createOrder = useCreateOrder();
   const { data: allOrders = [] } = useGetAllOrders();
 
-  // ── Customer fields ──
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("+91 ");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
-  // ── Line items ──
   const [lineItems, setLineItems] = useState<BillLineItem[]>([emptyItem()]);
 
-  // ── Totals ──
   const [discount, setDiscount] = useState("");
   const [advancePaid, setAdvancePaid] = useState("");
 
-  // ── Bill modal ──
   const [thermalOrder, setThermalOrder] = useState<ThermalOrder | null>(null);
   const [currentBillNumber, setCurrentBillNumber] = useState<
     number | undefined
@@ -82,7 +79,6 @@ export default function SmartBilling() {
     undefined,
   );
 
-  // ── Past customers for autocomplete ──
   const pastCustomers = useMemo(() => {
     const seen = new Map<
       string,
@@ -109,7 +105,6 @@ export default function SmartBilling() {
       .slice(0, 5);
   }, [customerName, pastCustomers]);
 
-  // Close suggestions on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -125,7 +120,6 @@ export default function SmartBilling() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Line item helpers ──
   const updateItem = (id: string, patch: Partial<BillLineItem>) => {
     setLineItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, ...patch } : it)),
@@ -140,7 +134,6 @@ export default function SmartBilling() {
     );
   };
 
-  // ── Per-item computed price ──
   const getItemUnitPrice = (item: BillLineItem): number => {
     if (item.customPrice !== "") return Number(item.customPrice) || 0;
     if (item.productId === "__nil__") return 0;
@@ -157,7 +150,6 @@ export default function SmartBilling() {
     return `${prod.name} — ${prod.thickness}`;
   };
 
-  // ── Totals ──
   const itemsSubtotal = lineItems.reduce(
     (sum, it) => sum + getItemUnitPrice(it) * it.quantity,
     0,
@@ -185,6 +177,8 @@ export default function SmartBilling() {
     const billNum = getNextBillNumber();
     setCurrentBillNumber(billNum);
 
+    const trackingToken = crypto.randomUUID();
+
     const billItems = lineItems.map((it) => ({
       size: getItemLabel(it),
       thickness: it.thickness === "1.5 Inch" ? 1.5 : 1,
@@ -200,9 +194,9 @@ export default function SmartBilling() {
       customerPhone: customerPhone.trim(),
       deliveryAddress: deliveryAddress.trim() || undefined,
       billNumber: billNum,
+      trackingToken,
     });
 
-    // Deduct stock for non-NIL items
     for (const it of lineItems) {
       if (it.productId !== "__nil__") {
         const filtered = products.filter((p) => p.thickness === it.thickness);
@@ -224,11 +218,11 @@ export default function SmartBilling() {
       advancePaid: advance,
       balanceDue,
       orderDate: BigInt(Date.now()) * BigInt(1_000_000),
+      trackingToken,
       items: billItems,
     });
   };
 
-  // Recent bills (last 8)
   const recentOrders = useMemo(() => [...allOrders].slice(0, 8), [allOrders]);
 
   return (
@@ -249,13 +243,12 @@ export default function SmartBilling() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5 md:p-6 space-y-5">
-        {/* ── SECTION: Customer ── */}
+        {/* Customer */}
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-[#436B95] mb-3">
             Customer
           </p>
           <div className="space-y-3">
-            {/* Name + autocomplete */}
             <div className="space-y-1.5">
               <Label htmlFor="customer-name" className="text-sm font-medium">
                 Customer Name
@@ -291,7 +284,6 @@ export default function SmartBilling() {
                     </button>
                   )}
                 </div>
-                {/* Suggestions dropdown */}
                 <AnimatePresence>
                   {showSuggestions && suggestions.length > 0 && (
                     <motion.div
@@ -331,7 +323,6 @@ export default function SmartBilling() {
               </div>
             </div>
 
-            {/* Phone */}
             <div className="space-y-1.5">
               <Label htmlFor="customer-phone" className="text-sm font-medium">
                 Phone{" "}
@@ -360,7 +351,6 @@ export default function SmartBilling() {
               </div>
             </div>
 
-            {/* Address */}
             <div className="space-y-1.5">
               <Label htmlFor="delivery-address" className="text-sm font-medium">
                 Delivery Address{" "}
@@ -394,7 +384,7 @@ export default function SmartBilling() {
 
         <div className="h-px bg-border" />
 
-        {/* ── SECTION: Items ── */}
+        {/* Items */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-bold uppercase tracking-widest text-[#436B95]">
@@ -440,7 +430,7 @@ export default function SmartBilling() {
 
         <div className="h-px bg-border" />
 
-        {/* ── SECTION: Payment ── */}
+        {/* Payment */}
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-[#436B95] mb-3">
             Payment
@@ -477,7 +467,7 @@ export default function SmartBilling() {
           </div>
         </div>
 
-        {/* ── Summary box ── */}
+        {/* Summary */}
         <div className="bg-[#353935]/5 border border-[#353935]/15 rounded-xl p-4 space-y-2">
           {discountAmt > 0 && (
             <>
@@ -520,7 +510,6 @@ export default function SmartBilling() {
           </div>
         </div>
 
-        {/* ── Create Bill ── */}
         <Button
           onClick={handleCreateBill}
           disabled={createOrder.isPending}
@@ -532,7 +521,7 @@ export default function SmartBilling() {
         </Button>
       </div>
 
-      {/* ── Recent Bills ── */}
+      {/* Recent Bills */}
       {recentOrders.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -570,6 +559,8 @@ export default function SmartBilling() {
                       advancePaid: o.advancePaid,
                       balanceDue: o.balanceDue,
                       orderDate: o.orderDate,
+                      trackingToken: (o as { trackingToken?: string })
+                        .trackingToken,
                       items: o.items.map((it) => ({
                         size: it.size,
                         thickness:
@@ -612,7 +603,6 @@ export default function SmartBilling() {
         </div>
       )}
 
-      {/* Bill modal */}
       {thermalOrder && (
         <ThermalBill
           order={thermalOrder}
@@ -635,7 +625,6 @@ export default function SmartBilling() {
   );
 }
 
-// ── Line Item Row Component ──
 interface LineItemRowProps {
   item: BillLineItem;
   index: number;
@@ -679,7 +668,6 @@ function LineItemRow({
       transition={{ duration: 0.18 }}
       className="bg-muted/30 border border-border rounded-xl p-3 space-y-2.5"
     >
-      {/* Row header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground">
           Item {index + 1}
@@ -695,7 +683,6 @@ function LineItemRow({
         )}
       </div>
 
-      {/* Thickness + Product on same row */}
       <div className="grid grid-cols-5 gap-2">
         <div className="col-span-2">
           <Select
@@ -748,9 +735,7 @@ function LineItemRow({
         </div>
       </div>
 
-      {/* Qty + Price + Line total */}
       <div className="grid grid-cols-3 gap-2 items-end">
-        {/* Qty stepper */}
         <div>
           <p className="text-[10px] text-muted-foreground mb-1">Qty</p>
           <div className="flex items-center border border-border rounded-lg bg-background overflow-hidden h-9">
@@ -775,8 +760,6 @@ function LineItemRow({
             </button>
           </div>
         </div>
-
-        {/* Unit price (editable override) */}
         <div>
           <p className="text-[10px] text-muted-foreground mb-1">
             Unit Price (₹)
@@ -795,8 +778,6 @@ function LineItemRow({
             className="h-9 text-xs bg-background"
           />
         </div>
-
-        {/* Line total */}
         <div className="text-right">
           <p className="text-[10px] text-muted-foreground mb-1">Total</p>
           <p className="text-sm font-bold text-foreground h-9 flex items-center justify-end">

@@ -22,6 +22,7 @@ import {
   Clock,
   CreditCard,
   Receipt,
+  Share2,
   Trash2,
   Truck,
 } from "lucide-react";
@@ -41,6 +42,7 @@ type LocalOrder = CustomerOrder & {
   customerPhone?: string;
   deliveryAddress?: string;
   billNumber?: number;
+  trackingToken?: string;
 };
 
 const STATUS_CONFIG = {
@@ -61,6 +63,12 @@ const STATUS_CONFIG = {
   },
 };
 
+const STATUS_LABEL = {
+  [OrderStatus.pending]: "Pending",
+  [OrderStatus.ready]: "Ready for Pickup",
+  [OrderStatus.delivered]: "Delivered",
+};
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   const cfg = STATUS_CONFIG[status];
   const Icon = cfg.icon;
@@ -72,6 +80,22 @@ function StatusBadge({ status }: { status: OrderStatus }) {
       {cfg.label}
     </span>
   );
+}
+
+function shareStatusViaWhatsApp(order: LocalOrder) {
+  const trackingUrl = `${window.location.origin}/#/track/${order.trackingToken}`;
+  const statusLabel = STATUS_LABEL[order.status];
+  const msg = `Hi ${order.customerName}, your order status has been updated to *${statusLabel}*.\n🔗 Track your order here: ${trackingUrl}\n— The Digital Gallery by Emon`;
+  const phone = (order.customerPhone || "").replace(/\D/g, "");
+  if (phone) {
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,
+      "_blank",
+    );
+  } else {
+    // No phone — open WhatsApp without pre-filled number
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  }
 }
 
 function OrderCard({
@@ -156,7 +180,7 @@ function OrderCard({
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Select
           value={order.status}
           onValueChange={async (val) => {
@@ -209,6 +233,18 @@ function OrderCard({
           <Receipt className="h-3 w-3 mr-1" /> Bill
         </Button>
 
+        {order.trackingToken && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => shareStatusViaWhatsApp(order)}
+            className="h-8 text-xs border-[#436B95] text-[#436B95] hover:bg-[#436B95]/10 px-3"
+            data-ocid="khatabook.secondary_button"
+          >
+            <Share2 className="h-3 w-3 mr-1" /> Share Status
+          </Button>
+        )}
+
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
@@ -260,7 +296,7 @@ export default function Khatabook() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-5"
+      className="space-y-5 w-full"
       data-ocid="khatabook.section"
     >
       <div>
@@ -288,7 +324,7 @@ export default function Khatabook() {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block bg-card border border-border rounded-xl overflow-hidden">
+      <div className="hidden md:block bg-card border border-border rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/40 border-b border-border">
@@ -305,7 +341,14 @@ export default function Khatabook() {
               ].map((h) => (
                 <th
                   key={h}
-                  className={`py-3 px-3 font-semibold text-foreground ${h === "Total" || h === "Advance" || h === "Balance" || h === "Actions" ? "text-right" : "text-left"}`}
+                  className={`py-3 px-3 font-semibold text-foreground ${
+                    h === "Total" ||
+                    h === "Advance" ||
+                    h === "Balance" ||
+                    h === "Actions"
+                      ? "text-right"
+                      : "text-left"
+                  }`}
                 >
                   {h}
                 </th>
@@ -388,7 +431,10 @@ function DesktopRow({
 
   const dateStr = new Date(
     Number(order.orderDate) / 1_000_000,
-  ).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  ).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+  });
   const billLabel = order.billNumber
     ? `#${String(order.billNumber).padStart(4, "0")}`
     : `#${String(order.id).slice(-4)}`;
@@ -413,7 +459,7 @@ function DesktopRow({
       <td className="py-3 px-3 text-muted-foreground text-xs max-w-[120px] truncate">
         {order.items.map((i) => i.size).join(", ")}
       </td>
-      <td className="py-3 px-3">
+      <td className="py-3 px-3 whitespace-nowrap">
         <Select
           value={order.status}
           onValueChange={async (val) => {
@@ -448,7 +494,7 @@ function DesktopRow({
       >
         ₹{order.balanceDue.toLocaleString("en-IN")}
       </td>
-      <td className="py-3 px-3">
+      <td className="py-3 px-3 whitespace-nowrap">
         <div className="flex justify-end gap-1.5">
           {order.balanceDue > 0 && (
             <Button
@@ -475,6 +521,17 @@ function DesktopRow({
           >
             <Receipt className="h-3 w-3 mr-1" /> Bill
           </Button>
+          {order.trackingToken && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => shareStatusViaWhatsApp(order)}
+              className="h-7 text-xs border-[#436B95] text-[#436B95] hover:bg-[#436B95]/10 px-2"
+              data-ocid="khatabook.secondary_button"
+            >
+              <Share2 className="h-3 w-3" />
+            </Button>
+          )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button

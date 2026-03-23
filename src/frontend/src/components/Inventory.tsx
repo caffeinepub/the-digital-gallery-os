@@ -24,6 +24,7 @@ import {
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { getFeatureFlags } from "../hooks/useFeatureFlags";
 import {
   useDecrementStock,
   useGetAllInventory,
@@ -51,6 +52,7 @@ export default function Inventory() {
 
   const [sizes, setSizes] = useState<string[]>(() => getInventorySizes());
   const [threshold, setThreshold] = useState(() => getLowStockThreshold());
+  const alertEnabled = getFeatureFlags().lowStockAlert ?? false;
   const [thresholdInput, setThresholdInput] = useState(() =>
     String(getLowStockThreshold()),
   );
@@ -292,7 +294,7 @@ export default function Inventory() {
               </div>
             ) : (
               <>
-                {isLow && !isEditing && (
+                {alertEnabled && isLow && !isEditing && (
                   <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                     Low Stock Alert
                   </span>
@@ -460,64 +462,70 @@ export default function Inventory() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3">
+      <div
+        className={`grid gap-3 ${alertEnabled ? "grid-cols-2" : "grid-cols-1"}`}
+      >
         <div className="bg-card border border-border rounded-xl shadow-card p-4">
           <p className="text-xs text-muted-foreground">Total Pieces</p>
           <p className="text-xl font-bold text-foreground font-serif mt-0.5">
             {totalPieces}
           </p>
         </div>
-        <div
-          className={`bg-card border rounded-xl shadow-card p-4 ${
-            threshold > 0 && lowStockCount > 0
-              ? "border-amber-200"
-              : "border-border"
-          }`}
-        >
-          <p className="text-xs text-muted-foreground">
-            {threshold > 0 ? `Low Stock (\u2264${threshold})` : "Low Stock"}
-          </p>
-          <p
-            className={`text-xl font-bold font-serif mt-0.5 ${
+        {alertEnabled && (
+          <div
+            className={`bg-card border rounded-xl shadow-card p-4 ${
               threshold > 0 && lowStockCount > 0
-                ? "text-amber-600"
-                : "text-muted-foreground"
+                ? "border-amber-200"
+                : "border-border"
             }`}
           >
-            {threshold > 0 ? lowStockCount : "\u2014"}
-          </p>
-        </div>
+            <p className="text-xs text-muted-foreground">
+              {threshold > 0 ? `Low Stock (\u2264${threshold})` : "Low Stock"}
+            </p>
+            <p
+              className={`text-xl font-bold font-serif mt-0.5 ${
+                threshold > 0 && lowStockCount > 0
+                  ? "text-amber-600"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {threshold > 0 ? lowStockCount : "\u2014"}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Low stock threshold setting */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <p className="text-xs font-semibold text-foreground mb-2">
-          \u26a0\ufe0f Low Stock Warning Threshold
-        </p>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min="0"
-            value={thresholdInput}
-            onChange={(e) => setThresholdInput(e.target.value)}
-            className="w-20 h-8 text-center text-sm font-bold border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#436B95]"
-            placeholder="0"
-            data-ocid="inventory.input"
-          />
-          <span className="text-sm text-muted-foreground">pieces</span>
-          <button
-            type="button"
-            onClick={handleSaveThreshold}
-            className="h-8 px-3 rounded-lg bg-[#436B95] text-white text-xs font-semibold hover:bg-[#355578] transition-colors"
-            data-ocid="inventory.save_button"
-          >
-            Save
-          </button>
-          <span className="text-xs text-muted-foreground">
-            {threshold === 0 ? "(disabled)" : `warn when \u2264${threshold}`}
-          </span>
+      {alertEnabled && (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-xs font-semibold text-foreground mb-2">
+            \u26a0\ufe0f Low Stock Warning Threshold
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              value={thresholdInput}
+              onChange={(e) => setThresholdInput(e.target.value)}
+              className="w-20 h-8 text-center text-sm font-bold border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#436B95]"
+              placeholder="0"
+              data-ocid="inventory.input"
+            />
+            <span className="text-sm text-muted-foreground">pieces</span>
+            <button
+              type="button"
+              onClick={handleSaveThreshold}
+              className="h-8 px-3 rounded-lg bg-[#436B95] text-white text-xs font-semibold hover:bg-[#355578] transition-colors"
+              data-ocid="inventory.save_button"
+            >
+              Save
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {threshold === 0 ? "(disabled)" : `warn when \u2264${threshold}`}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       <input
         ref={photoInputRef}
